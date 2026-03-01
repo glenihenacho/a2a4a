@@ -16,22 +16,63 @@ AgenticProxies is a **dual-vertical AI agent marketplace** connecting SMBs (smal
 
 ```
 a2a4a/
-├── CLAUDE.md          # This file — project context and conventions
-├── mvp.jsx            # Core marketplace platform (dashboard, market, live, registry, escrow)
-├── demand.jsx         # Demand-side conversational interface for SMBs
-├── waitlist.jsx       # Supply-side agent builder waitlist and onboarding
-└── vision.jsx         # Product roadmap and vision (3-phase rollout)
+├── CLAUDE.md              # This file — project context and conventions
+├── package.json           # Vite + React 18 + React Router DOM
+├── vite.config.js         # Vite build config with React plugin
+├── index.html             # Root HTML — Google Fonts, global resets
+├── .gitignore             # node_modules, dist, .env
+├── mvp.jsx                # Original standalone (preserved, canonical source)
+├── demand.jsx             # Original standalone (preserved)
+├── waitlist.jsx           # Original standalone (preserved)
+├── vision.jsx             # Original standalone (preserved)
+└── src/
+    ├── main.jsx           # React DOM entry point + BrowserRouter
+    ├── App.jsx            # Top-level router with lazy-loaded routes
+    ├── shared/
+    │   ├── tokens.js      # Design tokens — ft, colors, bg (single source of truth)
+    │   ├── hooks.js       # useMedia() responsive hook
+    │   └── primitives.jsx # Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart
+    └── pages/
+        ├── Dashboard.jsx  # Core marketplace (was mvp.jsx) — 5-tab internal navigation
+        ├── Demand.jsx     # SMB conversational interface (was demand.jsx)
+        ├── Waitlist.jsx   # Agent builder onboarding (was waitlist.jsx)
+        └── Vision.jsx     # Product roadmap (was vision.jsx)
 ```
 
-All files are **self-contained React components** designed to be served individually or composed into a larger app. There is no build tooling, package.json, or bundler config in the repo — these are pure `.jsx` modules.
+### Build & Run
+
+```bash
+npm install          # Install dependencies
+npm run dev          # Start dev server (Vite HMR)
+npm run build        # Production build → dist/
+npm run preview      # Preview production build locally
+```
+
+### Routes
+
+| Path | Component | Description |
+|------|-----------|-------------|
+| `/` | Redirect → `/dashboard` | Default entry |
+| `/dashboard` | `MarketplaceApp` | Core marketplace with 5 internal tabs |
+| `/demand` | `DemandChat` | SMB conversational interface |
+| `/waitlist` | `SupplyWaitlist` | Agent builder landing page |
+| `/vision` | `Vision` | Product roadmap |
+
+### Shared Modules
+
+**`src/shared/tokens.js`** — All design tokens extracted from the original files. Font object (`ft`), color constants (`blue`, `blueDeep`, `bg`, `green`, `orange`, `purple`, `pink`, `red`, `lightBlue`, `textPrimary`). Import these instead of redeclaring.
+
+**`src/shared/hooks.js`** — `useMedia()` hook returning `{ w, mob, tab, desk }`. Single implementation replacing the 3 separate definitions that existed across the original files.
+
+**`src/shared/primitives.jsx`** — Reusable UI components extracted from `mvp.jsx`: `Badge`, `VBadge`, `ScoreBar`, `Card`, `ScrollX`, `Sparkline`, `BarChart`, `DonutChart`.
 
 ---
 
 ## File-by-File Breakdown
 
-### `mvp.jsx` — Core Marketplace Platform
+### `src/pages/Dashboard.jsx` (was `mvp.jsx`) — Core Marketplace Platform
 
-The largest file (~186KB). Contains the operational hub with 5 tabbed pages, all mock data, chart primitives, and the full agent registry.
+The largest file. Contains the operational hub with 5 tabbed pages and all mock data. Chart primitives have been extracted to `src/shared/primitives.jsx`.
 
 **Navigation tabs (in order):**
 1. **Dashboard** (`"dashboard"`, icon `◎`) — Revenue metrics, bar/donut charts, transaction history, top agents, vertical split (SEO 55% / AIO 45%)
@@ -55,7 +96,7 @@ The largest file (~186KB). Contains the operational hub with 5 tabbed pages, all
 - `LIVE_SIGNALS` — 12 real-time auction signals with rank, spend, impressions, CTR, AIO position, agent counts
 - `TRENDING_UP` — Top 5 trending queries by volume growth
 
-**UI primitives defined here:**
+**UI primitives** (now in `src/shared/primitives.jsx`):
 - `Badge`, `VBadge` — Status/tag indicators
 - `ScoreBar` — Horizontal progress bar
 - `Card` — Reusable card container
@@ -64,15 +105,15 @@ The largest file (~186KB). Contains the operational hub with 5 tabbed pages, all
 - `BarChart` — Multi-series bar chart with legend
 - `DonutChart` — Pie/donut segment visualization
 
-**Page components:**
-- `Dashboard({ mob, tab })` — Lines ~419–611
-- `Intents({ mob, tab })` — Lines ~614–1487
-- `Agents({ mob, tab })` — Lines ~1489–1680
-- `Live({ mob, tab })` — Lines ~1683–1894
-- `Escrow({ mob })` — Lines ~1896–1926
-- `App()` (main, `export default`) — Lines ~1929–2051
+**Page components** (internal to Dashboard.jsx):
+- `Dashboard({ mob, tab })` — Revenue metrics, charts, transactions
+- `Intents({ mob, tab })` — Market demand signals
+- `Agents({ mob, tab })` — Agent registry
+- `Live({ mob, tab })` — Real-time signal feed
+- `Escrow({ mob })` — Escrow status
+- `MarketplaceApp()` (main, `export default`) — App shell with sidebar + tab navigation
 
-### `demand.jsx` — Demand-Side Conversational Interface
+### `src/pages/Demand.jsx` (was `demand.jsx`) — Demand-Side Conversational Interface
 
 A chat-based UI where SMBs describe their needs in natural language and get matched with agents.
 
@@ -96,7 +137,7 @@ A chat-based UI where SMBs describe their needs in natural language and get matc
 
 **Mirrors agents from supply side:** `AGENTS` array references the same 5 agent profiles (RankForge, OverviewFirst, Linksmith AI, ContentMesh, TechSEO Pro)
 
-### `waitlist.jsx` — Supply-Side Agent Builder Waitlist
+### `src/pages/Waitlist.jsx` (was `waitlist.jsx`) — Supply-Side Agent Builder Waitlist
 
 Marketing/onboarding landing page targeting agent builders who want to monetize their AI agents.
 
@@ -112,7 +153,7 @@ Marketing/onboarding landing page targeting agent builders who want to monetize 
 
 **Data:** `DEMAND_FEED` (12 items), `SCAN_LINES` (terminal output), `STATS`, `GUARANTEES`
 
-### `vision.jsx` — Product Roadmap
+### `src/pages/Vision.jsx` (was `vision.jsx`) — Product Roadmap
 
 Scrollable presentation with fade-in animations, section-based navigation.
 
@@ -133,6 +174,8 @@ Scrollable presentation with fade-in animations, section-based navigation.
 
 ### Technology Stack
 - **Framework:** React 18+ (hooks: `useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`)
+- **Build:** Vite 6 with `@vitejs/plugin-react`
+- **Routing:** React Router DOM 6 with lazy-loaded page components
 - **Styling:** Inline CSS objects — no external stylesheets or CSS-in-JS libraries
 - **State management:** Local component state only — no Redux, Context, or external stores
 - **Animations:** CSS `@keyframes` injected via `<style>` tags within components
@@ -257,36 +300,49 @@ The core protocol governing agent-to-marketplace communication:
 ## Cross-File Relationships
 
 ```
-demand.jsx  ←→  waitlist.jsx
-  (SMB side)      (Agent builder side)
-      ↓                  ↓
-      └──→  mvp.jsx  ←──┘
-         (Core Marketplace)
-               ↑
-          vision.jsx
-        (Future Roadmap)
+src/shared/tokens.js ──→ All pages (single source of truth for design tokens)
+src/shared/hooks.js  ──→ All pages (shared useMedia hook)
+src/shared/primitives.jsx ──→ Dashboard.jsx (extracted UI components)
+
+src/pages/Demand.jsx  ←→  src/pages/Waitlist.jsx
+     (SMB side)              (Agent builder side)
+         ↓                         ↓
+         └──→  src/pages/Dashboard.jsx  ←──┘
+                  (Core Marketplace)
+                        ↑
+               src/pages/Vision.jsx
+                 (Future Roadmap)
+
+src/App.jsx ──→ Routes all pages via React Router
 ```
 
-- `demand.jsx` and `waitlist.jsx` are complementary two-sided marketplace UIs
-- `mvp.jsx` is the operational hub aggregating data from both sides
-- `vision.jsx` is the strategic narrative and roadmap
-- Agent data in `demand.jsx` mirrors the profiles defined in `mvp.jsx`
-- The 10-phase scan pipeline appears in both `mvp.jsx` (Registry) and `waitlist.jsx` (Terminal UI)
-- SLA templates in `mvp.jsx` correspond to the SLA-backed escrow guarantees in `waitlist.jsx`
+- `Demand.jsx` and `Waitlist.jsx` are complementary two-sided marketplace UIs
+- `Dashboard.jsx` is the operational hub aggregating data from both sides
+- `Vision.jsx` is the strategic narrative and roadmap
+- Agent data in `Demand.jsx` mirrors the profiles defined in `Dashboard.jsx`
+- The 10-phase scan pipeline appears in both `Dashboard.jsx` (Registry) and `Waitlist.jsx` (Terminal UI)
+- SLA templates in `Dashboard.jsx` correspond to the SLA-backed escrow guarantees in `Waitlist.jsx`
+- Design tokens (`ft`, colors) are shared via `src/shared/tokens.js` — no duplication
 
 ---
 
 ## Working With This Codebase
 
-### Adding a new page/tab
-1. Define mock data constants at the top of `mvp.jsx`
+### Adding a new page/tab (within marketplace)
+1. Define mock data constants at the top of `src/pages/Dashboard.jsx`
 2. Create a new page component accepting `{ mob, tab }` props
-3. Add entry to `navItems` array in the `App()` component
+3. Add entry to `navItems` array in `MarketplaceApp()`
 4. Add routing case in the main content area's conditional render
 
+### Adding a new top-level route
+1. Create a new page component in `src/pages/`
+2. Import shared tokens from `../shared/tokens` and hooks from `../shared/hooks`
+3. Add a lazy import and `<Route>` in `src/App.jsx`
+4. Optionally add to `NAV_ITEMS` in `src/App.jsx`
+
 ### Adding a new agent
-1. Add to `MOCK_AGENTS` in `mvp.jsx` with full spec (capabilities, I/O schemas, tool requirements, SLA, policy, eval claims, stats)
-2. Optionally mirror in `demand.jsx` `AGENTS` array (simplified version)
+1. Add to `MOCK_AGENTS` in `src/pages/Dashboard.jsx` with full spec
+2. Optionally mirror in `src/pages/Demand.jsx` `AGENTS` array (simplified version)
 
 ### Adding a new intent/signal
 1. Add to `MOCK_INTENTS` for the Market tab
@@ -295,12 +351,13 @@ demand.jsx  ←→  waitlist.jsx
 
 ### Adding a new UI component
 1. Follow existing patterns: inline styles, `ft` font object, color constants
-2. Accept `mob` prop for responsive behavior
-3. Keep self-contained — no external dependencies
+2. Import tokens from `src/shared/tokens.js` — never redeclare
+3. Accept `mob` prop for responsive behavior
+4. If reusable across pages, add to `src/shared/primitives.jsx`
 
 ### Style guidelines
 - All styling is inline — do not create separate CSS files
-- Use the `ft` font object for all `fontFamily` declarations
+- Import from `src/shared/tokens.js` for all `fontFamily`, color, and background values
 - Use named color constants (`blue`, `blueDeep`, etc.) not raw hex values
 - Card backgrounds: `rgba(255,255,255,.02)`, borders: `rgba(66,165,245,.07)`
 - Monospace labels: `fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase"`
