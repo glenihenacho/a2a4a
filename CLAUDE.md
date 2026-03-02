@@ -2,13 +2,14 @@
 
 ## What This Project Is
 
-AgenticProxies is a **dual-vertical AI agent marketplace** connecting SMBs (small-to-medium businesses) with autonomous AI agents that perform **SEO** and **AI Overview (AIO)** optimization. The platform operates on the **A2A Protocol** (Agent-to-Agent), an escrow-protected, SLA-enforced job execution framework where agents compete on performance and get paid on delivery.
+AgenticProxies is a **dual-vertical AI agent marketplace** connecting SMBs (small-to-medium businesses) with autonomous AI agents that perform **SEO** and **AI Overview (AIO)** optimization. The platform operates on the **A2A Protocol** (Supply Agent → Marketplace → Demand Agent), an escrow-protected, SLA-enforced job execution framework where agents compete on performance and get paid on delivery.
 
-**Two-sided marketplace:**
-- **Demand side** — SMBs submit optimization requests (intents) with budgets
-- **Supply side** — AI agents (deployed as Docker containers) bid on jobs and execute autonomously
+**Three-layer architecture:**
+- **Demand side** — A marketplace-deployed **Demand Agent** with persistent memory serves each SMB, retaining job history, preferred agents, business context, and budget patterns across sessions
+- **Marketplace** — The orchestration layer handling intent matching, ad-ranked agent positioning, escrow, SLA verification, and container execution
+- **Supply side** — Third-party AI agents (deployed as Docker containers) bid for positioning and execute jobs autonomously in fresh, sandboxed containers
 
-**Settlement model:** Funds are locked in escrow before execution. Agents that hit SLA targets get instant release; misses trigger auto-computed partial refunds.
+**Settlement model:** Funds are locked in escrow before execution. Agents that hit SLA targets (verified by the platform or a third-party oracle) get instant release; misses trigger partial refunds (refund formula TBD).
 
 ---
 
@@ -34,7 +35,7 @@ a2a4a/
     │   └── primitives.jsx # Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart
     └── pages/
         ├── Dashboard.jsx  # Core marketplace (was mvp.jsx) — 5-tab internal navigation
-        ├── Demand.jsx     # SMB conversational interface (was demand.jsx)
+        ├── Demand.jsx     # Demand Agent interface (was demand.jsx)
         ├── Waitlist.jsx   # Agent builder onboarding (was waitlist.jsx)
         └── Vision.jsx     # Product roadmap (was vision.jsx)
 ```
@@ -54,7 +55,7 @@ npm run preview      # Preview production build locally
 |------|-----------|-------------|
 | `/` | Redirect → `/dashboard` | Default entry |
 | `/dashboard` | `MarketplaceApp` | Core marketplace with 5 internal tabs |
-| `/demand` | `DemandChat` | SMB conversational interface |
+| `/demand` | `DemandChat` | Demand Agent interface (persistent memory, per-SMB) |
 | `/waitlist` | `SupplyWaitlist` | Agent builder landing page |
 | `/vision` | `Vision` | Product roadmap |
 
@@ -77,7 +78,7 @@ The largest file. Contains the operational hub with 5 tabbed pages and all mock 
 **Navigation tabs (in order):**
 1. **Dashboard** (`"dashboard"`, icon `◎`) — Revenue metrics, bar/donut charts, transaction history, top agents, vertical split (SEO 55% / AIO 45%)
 2. **Market** (`"intents"`, icon `◉`) — SMB demand signals with search volume, AIO rates, CTR impact, industry categories, intent detail drill-down, budget activation
-3. **Live** (`"auctions"`, icon `⚡`) — Real-time signal feed with rank, spend, impressions, AIO visibility, agent count, 7-day spend sparklines, status filters (live/warming/cooling)
+3. **Live** (`"auctions"`, icon `⚡`) — Real-time signal feed with ad-ranked positioning data, spend, impressions, AIO visibility, agent count, 7-day spend sparklines, status filters (live/warming/cooling)
 4. **Registry** (`"agents"`, icon `⬡`) — Agent cards with reputation gauges, capabilities, eval claims, stats, SLA metrics; agent detail modal; new agent onboarding flow (10-phase scan pipeline)
 5. **Escrow** (`"escrow"`, icon `◈`) — Filterable intent list showing escrow status, milestone progress, fund lockup/release tracking
 
@@ -113,13 +114,13 @@ The largest file. Contains the operational hub with 5 tabbed pages and all mock 
 - `Escrow({ mob })` — Escrow status
 - `MarketplaceApp()` (main, `export default`) — App shell with sidebar + tab navigation
 
-### `src/pages/Demand.jsx` (was `demand.jsx`) — Demand-Side Conversational Interface
+### `src/pages/Demand.jsx` (was `demand.jsx`) — Demand Agent Interface
 
-A chat-based UI where SMBs describe their needs in natural language and get matched with agents.
+The front-end for the **Demand Agent** — a marketplace-deployed agent with **persistent memory** that serves each SMB. The Demand Agent retains past job results, preferred agents, business context (industry, size, goals), and budget patterns across sessions, getting smarter over time per SMB. Unlike supply agents, the Demand Agent does not go through the Docker scan pipeline — it is a first-party platform agent.
 
 **Flow phases:** intro → gathering → matching → costing → executing → complete
 
-**Scripted conversation demo:** A bakery wants local SEO + AIO ranking. The system extracts intent, matches agents, shows cost breakdown ($504 for TechSEO Pro), demonstrates execution monitoring through 6 stages, delivers artifacts, and releases escrow funds.
+**Scripted conversation demo:** A bakery wants local SEO + AIO ranking. The Demand Agent extracts intent, presents ad-ranked agents, shows cost breakdown ($504 for TechSEO Pro), demonstrates execution monitoring through 6 stages, delivers artifacts, and releases escrow funds.
 
 **Generative UI components:**
 - `TypingIndicator` — Animated loading dots
@@ -145,9 +146,9 @@ Marketing/onboarding landing page targeting agent builders who want to monetize 
 - **Hero** — "Your agent already works. Now let it earn." with 142 SMBs stat
 - **Live demand feed** — 12 rotating SMB demand items across industries
 - **Agent economics** — Revenue projections (5 clients = $4,700/mo, 15 = $14,100, 30 = $28,200)
-- **Founding 50 program** — 0% platform fee for 12 months (27 slots remaining)
+- **Founding 50 program** — 0% platform fee + 0% CPE bid fees for 12 months (27 slots remaining)
 - **Terminal UI** — Simulated 10-phase Docker-based agent ingest flow (pull → inspect → manifest → capabilities → schemas → tools → SLA → policy → eval → wrap)
-- **Builder guarantees** — 4 pillars: Sandboxed Execution, Transparent Economics (0% → 8% flat), SLA-Backed Escrow, Full Telemetry Access
+- **Builder guarantees** — 4 pillars: Sandboxed Execution (fresh container per job, enforced Tool Allowlist), Transparent Economics (0% → 8% flat clearing + CPE bids), SLA-Backed Escrow, Full Telemetry Access
 - **A2A Protocol spec** — JobSpec input and RunResult output format
 - **Founding slots form** — Email capture + optional Docker image URI, progress bar (23/50 claimed)
 
@@ -158,7 +159,7 @@ Marketing/onboarding landing page targeting agent builders who want to monetize 
 Scrollable presentation with fade-in animations, section-based navigation.
 
 **3-phase rollout:**
-1. **Phase 01: Dual Vertical MVP** (8–10 weeks) — Intent submission, 10–15 curated agents, blind auctions, SLA templates, Stripe/USDC escrow, reputation scoring
+1. **Phase 01: Dual Vertical MVP** (8–10 weeks) — Intent submission, 10–15 curated agents, ad-model agent positioning (cost-per-engagement bids), SLA templates, Stripe/USDC escrow, reputation scoring
 2. **Phase 02: Token Launch** (6–8 weeks post-MVP) — Utility token staking/governance, tiered fee discounts (BNB model), on-chain escrow migration, agentic wallet R&D
 3. **Phase 03: Full Agentic Market** (3–6 months post-MVP) — Open agent registration, autonomous bidding, multi-vertical expansion, agentic wallets & x402 payments, decentralized dispute arbitration
 
@@ -249,7 +250,7 @@ style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color: blue, letter
 ## Domain Concepts
 
 ### A2A Protocol
-The core protocol governing agent-to-marketplace communication:
+The core protocol governing the three-layer flow: **Supply Agent → Marketplace → Demand Agent**.
 
 **JobSpec (input):** `agent_id`, `client_id`, `intent_signal_id`, parameters, `budget_cap`, SLA requirements, `escrow_tx_id`, `callback_url`
 
@@ -261,22 +262,26 @@ The core protocol governing agent-to-marketplace communication:
 - **SEO** — Technical audits, keyword ranking, link building, on-page optimization, crawl analysis
 - **AIO** — AI Overview citation placement, content restructuring, schema markup, entity resolution, FAQ generation
 
-### Agent Lifecycle
-1. Docker image submitted
-2. 10-phase automated scan (pull → inspect → manifest → capabilities → schemas → tools → SLA → policy → eval → wrap)
+SEO and AIO are **separate job types** with distinct SLA templates, but a **single job can span both verticals** (e.g., a local bakery wanting both organic ranking and AIO citation). The platform could theoretically split a multi-vertical job across specialist agents (one SEO, one AIO), but **multi-agent escrow coordination is out of scope** for the current phase — so for now, a multi-vertical job is assigned to one agent capable of both (e.g., TechSEO Pro).
+
+### Supply Agent Lifecycle
+1. Docker image submitted by agent builder
+2. **One-time** 10-phase automated scan per agent version (pull → inspect → manifest → capabilities → schemas → tools → SLA → policy → eval → wrap) — pushing a new image version triggers a re-scan
 3. Sandbox testing with test JobSpecs
 4. Evaluation run against claimed metrics
 5. Review & approval (compliance, telemetry, thresholds)
 6. Live on marketplace (published, routable, monitored)
 
+**Execution model:** Each job spins up a **fresh container** from the agent's approved image. Containers can make outbound HTTP requests (crawling, APIs) and write to persistent storage. The **Tool Allowlist** in the A2A wrapper is an actual enforcement mechanism, not aspirational. When a new agent version is submitted, in-progress jobs continue running on the old version; new jobs use the new version. SMBs cannot pin to a specific agent version.
+
 ### Intent Flow
-1. SMB submits intent (natural language or structured)
-2. Intent matched to vertical(s)
-3. Agents bid (blind auction)
-4. SMB selects agent
+1. SMB submits intent (natural language or structured) via Demand Agent
+2. Demand Agent extracts intent and matches to vertical(s)
+3. Eligible supply agents are ranked using an **ad-model**: agents bid for positioning (cost-per-engagement), with higher bids yielding better rank — low-reputation agents must bid more to compete with high performers
+4. SMB selects agent from the ranked list (engagement triggers bid charge)
 5. Funds locked in escrow
-6. Agent executes autonomously
-7. SLA verified → escrow released or partial refund
+6. Platform spins up a fresh container for the selected supply agent; agent executes autonomously
+7. SLA verified by platform or third-party oracle → escrow released or partial refund
 
 ### Agent Registry (6 agents in mock data)
 | ID | Name | Verticals | Reputation | Success Rate | Status |
@@ -289,11 +294,16 @@ The core protocol governing agent-to-marketplace communication:
 | agt-006 | TechSEO Pro | SEO, AIO | 96 | 97.2% | live |
 
 ### Economics
-- **Founding 50:** 0% platform fee for 12 months
-- **Standard fee:** 8% flat clearing fee
+
+**Two revenue streams:**
+1. **Clearing fee** — 8% flat fee on completed jobs
+2. **Cost-per-engagement (CPE) bids** — Supply agents pay when an SMB selects them from the ranked list. Higher bids = better positioning. Low-reputation agents must bid more to compete with high performers.
+
+**Founding 50 program:** Waives **both** clearing fees and CPE bid fees for 12 months. Founding agents can still choose to bid for positioning but are not charged.
+
 - **Currencies:** USDC and USD
-- **Transaction types:** clearing, milestone, refund
-- **Escrow states:** pending → locked → released (or partial refund on SLA miss)
+- **Transaction types:** clearing, milestone, refund, CPE bid charge
+- **Escrow states:** pending → locked → released (or partial refund on SLA miss; refund formula TBD)
 
 ---
 
@@ -305,7 +315,7 @@ src/shared/hooks.js  ──→ All pages (shared useMedia hook)
 src/shared/primitives.jsx ──→ Dashboard.jsx (extracted UI components)
 
 src/pages/Demand.jsx  ←→  src/pages/Waitlist.jsx
-     (SMB side)              (Agent builder side)
+   (Demand Agent)           (Supply Agent builders)
          ↓                         ↓
          └──→  src/pages/Dashboard.jsx  ←──┘
                   (Core Marketplace)
@@ -316,7 +326,7 @@ src/pages/Demand.jsx  ←→  src/pages/Waitlist.jsx
 src/App.jsx ──→ Routes all pages via React Router
 ```
 
-- `Demand.jsx` and `Waitlist.jsx` are complementary two-sided marketplace UIs
+- `Demand.jsx` (Demand Agent) and `Waitlist.jsx` (Supply Agent onboarding) are complementary two-sided marketplace UIs
 - `Dashboard.jsx` is the operational hub aggregating data from both sides
 - `Vision.jsx` is the strategic narrative and roadmap
 - Agent data in `Demand.jsx` mirrors the profiles defined in `Dashboard.jsx`
