@@ -9,7 +9,7 @@ AgenticProxies is a **dual-vertical AI agent marketplace** connecting SMBs (smal
 - **Marketplace** — The orchestration layer handling intent matching, ad-ranked agent positioning, escrow, SLA verification, and container execution
 - **Supply side** — Third-party AI agents (deployed as Docker containers) bid for positioning and execute jobs autonomously in fresh, sandboxed containers
 
-**Settlement model:** Funds are locked in escrow before execution. Agents that hit SLA targets (verified by the platform or a third-party oracle) get instant release; misses trigger partial refunds (refund formula TBD).
+**Settlement model:** Funds are locked in escrow before execution. Agents that hit SLA targets (verified by the platform or a third-party oracle) get instant release; misses trigger partial refunds via **tiered thresholds** (same formula across both verticals): <25% of SLA target = full refund, 25–75% = 50% refund, >75% = no refund. No payout floor on total failure (zero milestones), but once any milestone is delivered the agent keeps a minimum payout.
 
 ---
 
@@ -116,7 +116,7 @@ The largest file. Contains the operational hub with 5 tabbed pages and all mock 
 
 ### `src/pages/Demand.jsx` (was `demand.jsx`) — Demand Agent Interface
 
-The front-end for the **Demand Agent** — a marketplace-deployed agent with **persistent memory** that serves each SMB. The Demand Agent retains past job results, preferred agents, business context (industry, size, goals), and budget patterns across sessions, getting smarter over time per SMB. Unlike supply agents, the Demand Agent does not go through the Docker scan pipeline — it is a first-party platform agent.
+The front-end for the **Demand Agent** — a marketplace-deployed agent with **persistent memory** that serves each SMB. The Demand Agent retains past job results, preferred agents, business context (industry, size, goals), and budget patterns across sessions, getting smarter over time per SMB. Unlike supply agents, the Demand Agent does not go through the Docker scan pipeline — it is a first-party platform agent. **The Demand Agent does not produce RunResults** — it is a stateful orchestrator that creates JobSpecs and monitors supply agent execution, but its own work is not modeled as an A2A protocol job.
 
 **Flow phases:** intro → gathering → matching → costing → executing → complete
 
@@ -258,6 +258,8 @@ The core protocol governing the three-layer flow: **Supply Agent → Marketplace
 
 **Wrapper responsibilities:** Format Translation, Budget Enforcement, Tool Allowlist, Structured Telemetry, Checkpointing, Artifact Schema
 
+**Protocol boundary — Demand Agent does NOT produce RunResults.** JobSpec/RunResult is the contract between the marketplace and **supply agents only**. The Demand Agent is a first-party stateful orchestrator, not a task executor. It does not go through Docker scan, does not compete in ad-ranked positioning, and has no escrow settlement. Its orchestration work (intent extraction, agent matching, cost estimation, job dispatch) is logged via platform-internal telemetry, not A2A protocol artifacts. Rationale: RunResult assumes bounded atomic jobs with financial settlement — the Demand Agent's conversational, session-spanning, per-SMB lifecycle does not fit that model.
+
 ### Verticals
 - **SEO** — Technical audits, keyword ranking, link building, on-page optimization, crawl analysis
 - **AIO** — AI Overview citation placement, content restructuring, schema markup, entity resolution, FAQ generation
@@ -303,7 +305,7 @@ SEO and AIO are **separate job types** with distinct SLA templates, but a **sing
 
 - **Currencies:** USDC and USD
 - **Transaction types:** clearing, milestone, refund, CPE bid charge
-- **Escrow states:** pending → locked → released (or partial refund on SLA miss; refund formula TBD)
+- **Escrow states:** pending → locked → released (or partial refund on SLA miss via tiered thresholds)
 
 ---
 
