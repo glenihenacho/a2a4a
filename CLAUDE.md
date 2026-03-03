@@ -374,3 +374,88 @@ src/App.jsx ──→ Routes all pages via React Router
 - Card backgrounds: `rgba(255,255,255,.02)`, borders: `rgba(66,165,245,.07)`
 - Monospace labels: `fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase"`
 - Use `borderRadius: 14` for cards, `borderRadius: 100` for badges/pills
+
+---
+
+## Production Roadmap
+
+**Target stack:** Hono (backend) + Drizzle (ORM) + Postgres + Lucia (auth) + Stripe (payments) + Docker + Fly.io
+
+**Current state:** Pure frontend SPA with hardcoded mock data. Zero tests, CI/CD, backend, or deployment config.
+
+### Phase 0: Dev Tooling (1–2 days)
+- ESLint + Prettier + `.editorconfig`
+- `lint-staged` + `husky` pre-commit hooks
+- `npm run lint` and `npm run format` scripts
+
+### Phase 1: Frontend Tests (2–3 days)
+- Vitest + React Testing Library for component tests
+- Playwright for E2E (scripted conversation flow in Demand, tab navigation in Dashboard)
+- `npm test` and `npm run test:e2e` scripts
+
+### Phase 2: CI/CD Pipeline (1 day)
+- GitHub Actions: lint → test → build on every PR
+- Playwright E2E in CI with headless browser
+- Build artifact caching
+
+### Phase 3: Backend API — Hono (1–2 weeks)
+- `/server` directory with Hono app
+- API routes mirroring the current mock data:
+  - `GET/POST /api/agents` — registry CRUD
+  - `GET/POST /api/intents` — market intents
+  - `GET/POST /api/jobs` — job dispatch + status
+  - `GET /api/signals` — live auction feed
+  - `GET/POST /api/escrow` — escrow state machine
+  - `GET /api/transactions` — transaction history
+  - `GET /api/metrics` — revenue + performance KPIs
+- Vite dev proxy to Hono backend
+- Frontend migrated from hardcoded data to `fetch()` calls
+
+### Phase 4: Database — Postgres + Drizzle (1 week)
+- Schema:
+  - `users` — SMBs + agent builders, account type enum
+  - `agents` — registry, capabilities, SLA params, reputation, status
+  - `intents` — SMB demand signals, vertical, volume, competition
+  - `jobs` — JobSpec lifecycle (draft → escrowed → executing → completed/failed)
+  - `escrow` — state machine (pending → locked → released/refunded), tiered threshold logic
+  - `transactions` — clearing fees, milestones, refunds, CPE bid charges
+  - `signals` — live auction data, rank, spend, impressions
+- Drizzle migrations via `drizzle-kit`
+- Seed script populated from current mock data constants
+- API routes switch from in-memory to Drizzle queries
+
+### Phase 5: Auth — Lucia (3–5 days)
+- Two account types: `smb` (demand side) and `builder` (supply side)
+- Lucia session-based auth with Postgres session store
+- Login/register pages in frontend
+- Protected API routes via Hono middleware
+- Demand Agent sessions tied to authenticated SMB user
+- Agent builder dashboard scoped to their own agents
+
+### Phase 6: Escrow + Payments — Stripe (1–2 weeks)
+- Stripe Connect for agent builder payouts
+- Payment intents for job funding (SMB pays → escrow locks)
+- Escrow state machine in backend:
+  - `pending` → SMB approves cost → `locked`
+  - Job completes + SLA passes → `released`
+  - SLA miss → tiered refund (<25% target = full refund, 25–75% = 50%, >75% = none)
+  - Floor only on partial delivery (≥1 milestone hit)
+- Stripe webhook handlers for payment events
+- USD/Stripe only for MVP — USDC deferred to token launch phase
+
+### Phase 7: Docker + Deployment (3–5 days)
+- `Dockerfile` — Hono backend serves API + static Vite frontend build
+- `docker-compose.yml` — local dev (Hono + Postgres)
+- `fly.toml` — Fly.io deployment config
+- Fly Postgres managed instance
+- GitHub Actions: deploy on merge to `main`
+- Environment management (`.env.example`, Fly secrets for Stripe keys, DB URL, Lucia secret)
+
+### Deferred (post-MVP)
+- Docker agent runtime (container-per-job sandboxed execution)
+- 10-phase automated scan pipeline (real, not simulated)
+- Token launch (utility staking, governance, fee discounts)
+- USDC / on-chain escrow migration
+- Multi-agent job coordination (splitting SEO + AIO across specialist agents)
+- Automated SLA oracle verification
+- Agentic wallets + x402 payments
