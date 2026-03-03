@@ -4,12 +4,20 @@ import { Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart
 
 describe("Badge", () => {
   it("renders children text", () => {
-    render(<Badge color="#fff" bg="#000">LIVE</Badge>);
+    render(
+      <Badge color="#fff" bg="#000">
+        LIVE
+      </Badge>,
+    );
     expect(screen.getByText("LIVE")).toBeInTheDocument();
   });
 
   it("applies color and background", () => {
-    render(<Badge color="#42A5F5" bg="rgba(66,165,245,.1)">SEO</Badge>);
+    render(
+      <Badge color="#42A5F5" bg="rgba(66,165,245,.1)">
+        SEO
+      </Badge>,
+    );
     const el = screen.getByText("SEO");
     expect(el.style.color).toBe("#42A5F5");
   });
@@ -58,7 +66,11 @@ describe("Card", () => {
 
 describe("ScrollX", () => {
   it("renders children in a scrollable container", () => {
-    render(<ScrollX><span>Scrollable</span></ScrollX>);
+    render(
+      <ScrollX>
+        <span>Scrollable</span>
+      </ScrollX>,
+    );
     expect(screen.getByText("Scrollable")).toBeInTheDocument();
   });
 });
