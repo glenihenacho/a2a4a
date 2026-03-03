@@ -21,9 +21,13 @@ a2a4a/
 ├── package.json           # Vite + React 18 + Hono backend
 ├── vite.config.js         # Vite build config with React plugin + API proxy
 ├── drizzle.config.js      # Drizzle ORM config for migrations
+├── Dockerfile             # Multi-stage build (deps → build → production)
+├── docker-compose.yml     # Local dev (Postgres + app container)
+├── fly.toml               # Fly.io deployment config
 ├── index.html             # Root HTML — Google Fonts, global resets
 ├── .env.example           # Environment variable template
 ├── .gitignore             # node_modules, dist, .env
+├── .dockerignore          # Docker build context exclusions
 ├── mvp.jsx                # Original standalone (preserved, canonical source)
 ├── demand.jsx             # Original standalone (preserved)
 ├── waitlist.jsx           # Original standalone (preserved)
@@ -63,7 +67,17 @@ npm run dev          # Start Vite dev server (HMR, frontend only)
 npm run dev:server   # Start Hono API server on port 3001
 npm run dev:full     # Start both API server + Vite concurrently
 npm run build        # Production build → dist/
-npm run preview      # Preview production build locally
+npm start            # Production: Hono serves API + static frontend
+npm run preview      # Preview production build locally (Vite)
+```
+
+### Docker
+
+```bash
+docker compose up -d          # Start Postgres + app containers
+docker compose up -d db       # Start Postgres only (for local dev with npm run dev:full)
+docker compose down            # Stop all containers
+docker compose logs -f app     # Tail app logs
 ```
 
 ### Database
@@ -496,9 +510,9 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 
 ## Production Roadmap
 
-**Target stack:** Hono (backend) + Drizzle (ORM) + Postgres + Lucia (auth) + Stripe (payments) + Docker + Fly.io
+**Target stack:** Hono (backend) + Drizzle (ORM) + Postgres + Better Auth + Stripe (payments) + Docker + Fly.io
 
-**Current state:** React SPA with Hono backend API + Drizzle ORM + PostgreSQL schema. Frontend fetches from API with inline fallbacks. Dev tooling (ESLint, Prettier, Husky) and frontend tests (Vitest, Playwright) are configured. No auth, payments, Docker runtime, or deployment config yet.
+**Current state:** Full-stack React SPA + Hono API + Drizzle/Postgres. Better Auth (email/password, roles). Stripe escrow (PaymentIntents, Connect, tiered refunds). Docker + Fly.io deployment pipeline. Dev tooling (ESLint, Prettier, Husky), tests (Vitest, Playwright), CI/CD (GitHub Actions → Fly.io).
 
 ### Phase 0: Dev Tooling (1–2 days)
 - ESLint + Prettier + `.editorconfig`
@@ -583,13 +597,16 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 - Seed data: 3 jobs + 3 escrow records (locked, locked, released) linked to existing intents
 - USD/Stripe only for MVP — USDC deferred to token launch phase
 
-### Phase 7: Docker + Deployment (3–5 days)
-- `Dockerfile` — Hono backend serves API + static Vite frontend build
-- `docker-compose.yml` — local dev (Hono + Postgres)
-- `fly.toml` — Fly.io deployment config
-- Fly Postgres managed instance
-- GitHub Actions: deploy on merge to `main`
-- Environment management (`.env.example`, Fly secrets for Stripe keys, DB URL, Lucia secret)
+### Phase 7: Docker + Deployment ✅
+- `Dockerfile` — Multi-stage build (deps → build frontend → production image with Hono serving static `/dist` + API)
+- `docker-compose.yml` — Local dev stack: Postgres 16 + app container, maps port 3001 → 8080
+- `fly.toml` — Fly.io deployment config (IAD region, shared CPU, 512MB RAM, auto-stop/start)
+- `.dockerignore` — Excludes node_modules, test files, dev configs from Docker context
+- `.github/workflows/deploy.yml` — CD pipeline: runs CI → deploys to Fly.io → runs DB migrations on merge to `main`
+- `.github/workflows/ci.yml` — Updated with `workflow_call` trigger for reuse by deploy workflow
+- `server/index.js` — Now serves static `/dist` with SPA fallback in production; dynamic CORS for Fly.io hostname
+- `package.json` — Added `start` script (`node server/index.js`) for production
+- Environment management: Fly secrets for `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FLY_API_TOKEN`
 
 ### Deferred (post-MVP)
 - Docker agent runtime (container-per-job sandboxed execution)

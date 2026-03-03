@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import "dotenv/config";
@@ -16,13 +17,23 @@ import {
   PLATFORM_FEE_PCT,
 } from "./stripe.js";
 import { lockEscrow, releaseEscrow, refundEscrow, calculateRefund } from "./escrow.js";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = new Hono();
+
+const allowedOrigins = ["http://localhost:5173", "http://localhost:3001"];
+if (process.env.FLY_APP_NAME) {
+  allowedOrigins.push(`https://${process.env.FLY_APP_NAME}.fly.dev`);
+}
 
 app.use(
   "/api/*",
   cors({
-    origin: ["http://localhost:5173", "http://localhost:3001"],
+    origin: allowedOrigins,
     credentials: true,
   }),
 );
@@ -487,6 +498,18 @@ app.get("/api/config/status-cfg", (c) => c.json(STATUS_CFG));
 // ─── HEALTH ───
 
 app.get("/api/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
+
+// ─── STATIC FILES (production) ───
+// Serve the Vite-built frontend from /dist when it exists.
+
+const distPath = resolve(__dirname, "../dist");
+if (existsSync(distPath)) {
+  app.use("/*", serveStatic({ root: "./dist" }));
+
+  // SPA fallback — serve index.html for any non-API, non-file route
+  const indexHtml = readFileSync(resolve(distPath, "index.html"), "utf-8");
+  app.get("*", (c) => c.html(indexHtml));
+}
 
 // ─── START SERVER ───
 
