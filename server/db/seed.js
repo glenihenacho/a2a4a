@@ -236,12 +236,108 @@ const INTENT_CATEGORIES = [
   { name: "Professional Services", count: 1, avgAio: 38, avgVol: 28000, color: "#90CAF9" },
 ];
 
+// ─── JOBS (linked to engaged/milestone/completed intents) ───
+
+const MOCK_JOBS = [
+  {
+    id: "JOB-001",
+    intentId: "INT-002",
+    agentId: "agt-006",
+    status: "executing",
+    vertical: "SEO",
+    slaTemplateId: "seo-1",
+    budgetCents: 180000,
+    costActualCents: null,
+    milestonesTotal: 4,
+    milestonesHit: 1,
+    slaTarget: 90,
+    slaAchieved: null,
+    startedAt: "2025-02-19T10:00:00Z",
+  },
+  {
+    id: "JOB-002",
+    intentId: "INT-004",
+    agentId: "agt-001",
+    status: "executing",
+    vertical: "AIO",
+    slaTemplateId: "aio-3",
+    budgetCents: 360000,
+    costActualCents: null,
+    milestonesTotal: 5,
+    milestonesHit: 2,
+    slaTarget: 60,
+    slaAchieved: 40,
+    startedAt: "2025-02-13T08:00:00Z",
+  },
+  {
+    id: "JOB-003",
+    intentId: "INT-005",
+    agentId: "agt-002",
+    status: "completed",
+    vertical: "AIO",
+    slaTemplateId: "aio-1",
+    budgetCents: 90000,
+    costActualCents: 82800,
+    milestonesTotal: 3,
+    milestonesHit: 3,
+    slaTarget: 85,
+    slaAchieved: 92,
+    slaReport: { target: "AIO readiness", achieved: "92% coverage", pass: true },
+    artifacts: [
+      { type: "report", name: "AIO Audit Report.pdf", size: "2.4 MB" },
+      { type: "schema", name: "structured-data.json", size: "18 KB" },
+    ],
+    startedAt: "2025-01-29T09:00:00Z",
+    completedAt: "2025-02-14T16:30:00Z",
+  },
+];
+
+// ─── ESCROW (one per job) ───
+
+const MOCK_ESCROW = [
+  {
+    id: "ESC-001",
+    jobId: "JOB-001",
+    state: "locked",
+    amountCents: 180000,
+    currency: "USD",
+    platformFeeCents: 0,
+    stripePaymentIntentId: "pi_sim_001",
+    lockedAt: "2025-02-19T10:00:00Z",
+  },
+  {
+    id: "ESC-002",
+    jobId: "JOB-002",
+    state: "locked",
+    amountCents: 360000,
+    currency: "USD",
+    platformFeeCents: 0,
+    stripePaymentIntentId: "pi_sim_002",
+    lockedAt: "2025-02-13T08:00:00Z",
+  },
+  {
+    id: "ESC-003",
+    jobId: "JOB-003",
+    state: "released",
+    amountCents: 90000,
+    currency: "USD",
+    platformFeeCents: 7200,
+    agentPayoutCents: 82800,
+    stripePaymentIntentId: "pi_sim_003",
+    stripeTransferId: "tr_sim_003",
+    lockedAt: "2025-01-29T09:00:00Z",
+    releasedAt: "2025-02-14T16:30:00Z",
+  },
+];
+
 // ─── SEED FUNCTION ───
 
 async function seed() {
   console.log("Seeding database...");
 
   // Clear existing data in reverse dependency order
+  await db.delete(schema.escrow);
+  await db.delete(schema.jobs);
   await db.delete(schema.intentCategories);
   await db.delete(schema.intentMarket);
   await db.delete(schema.signals);
@@ -314,6 +410,27 @@ async function seed() {
   // Insert intent categories
   await db.insert(schema.intentCategories).values(INTENT_CATEGORIES);
   console.log(`  ✓ intent_categories: ${INTENT_CATEGORIES.length} rows`);
+
+  // Insert jobs
+  for (const j of MOCK_JOBS) {
+    await db.insert(schema.jobs).values({
+      ...j,
+      startedAt: j.startedAt ? new Date(j.startedAt) : null,
+      completedAt: j.completedAt ? new Date(j.completedAt) : null,
+    });
+  }
+  console.log(`  ✓ jobs: ${MOCK_JOBS.length} rows`);
+
+  // Insert escrow
+  for (const e of MOCK_ESCROW) {
+    await db.insert(schema.escrow).values({
+      ...e,
+      lockedAt: e.lockedAt ? new Date(e.lockedAt) : null,
+      releasedAt: e.releasedAt ? new Date(e.releasedAt) : null,
+      refundedAt: e.refundedAt ? new Date(e.refundedAt) : null,
+    });
+  }
+  console.log(`  ✓ escrow: ${MOCK_ESCROW.length} rows`);
 
   // Create demo users via Better Auth API
   const demoUsers = [

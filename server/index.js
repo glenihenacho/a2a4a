@@ -5,6 +5,17 @@ import "dotenv/config";
 import { db, schema } from "./db/index.js";
 import { eq } from "drizzle-orm";
 import { auth } from "./auth.js";
+import {
+  isStripeEnabled,
+  createPaymentIntent,
+  createTransfer,
+  createRefund,
+  createConnectAccount,
+  createAccountLink,
+  constructWebhookEvent,
+  PLATFORM_FEE_PCT,
+} from "./stripe.js";
+import { lockEscrow, releaseEscrow, refundEscrow, calculateRefund } from "./escrow.js";
 
 const app = new Hono();
 
@@ -219,12 +230,212 @@ app.get("/api/signals", async (c) => {
   return c.json(rows);
 });
 
-// ─── ESCROW (intent-based escrow view) ───
+// ─── JOBS ───
+
+app.get("/api/jobs", async (c) => {
+  const rows = await db.select().from(schema.jobs);
+  return c.json(rows);
+});
+
+app.get("/api/jobs/:id", async (c) => {
+  const { id } = c.req.param();
+  const [row] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, id));
+  if (!row) return c.json({ error: "Job not found" }, 404);
+  return c.json(row);
+});
+
+app.post("/api/jobs", async (c) => {
+  const body = await c.req.json();
+  const id = `JOB-${String(Date.now()).slice(-6)}`;
+  const [inserted] = await db
+    .insert(schema.jobs)
+    .values({ id, ...body })
+    .returning();
+  return c.json(inserted, 201);
+});
+
+// ─── ESCROW ───
 
 app.get("/api/escrow", async (c) => {
-  // Escrow view is derived from intents — same data, filtered by escrow-relevant statuses
-  const rows = await db.select().from(schema.intents);
+  const rows = await db.select().from(schema.escrow);
   return c.json(rows);
+});
+
+app.get("/api/escrow/:id", async (c) => {
+  const { id } = c.req.param();
+  const [row] = await db.select().from(schema.escrow).where(eq(schema.escrow.id, id));
+  if (!row) return c.json({ error: "Escrow not found" }, 404);
+  return c.json(row);
+});
+
+// Create escrow + Stripe PaymentIntent for a job
+app.post("/api/escrow", async (c) => {
+  const { jobId, amountCents, currency } = await c.req.json();
+  if (!jobId || !amountCents) {
+    return c.json({ error: "jobId and amountCents are required" }, 400);
+  }
+
+  // Verify job exists
+  const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, jobId));
+  if (!job) return c.json({ error: "Job not found" }, 404);
+
+  // Create Stripe PaymentIntent (simulated if no key)
+  const pi = await createPaymentIntent(amountCents, currency || "USD", {
+    jobId,
+    agentId: job.agentId,
+    intentId: job.intentId,
+  });
+
+  const id = `ESC-${String(Date.now()).slice(-6)}`;
+  const [inserted] = await db
+    .insert(schema.escrow)
+    .values({
+      id,
+      jobId,
+      amountCents,
+      currency: currency || "USD",
+      stripePaymentIntentId: pi.id,
+    })
+    .returning();
+  return c.json({ escrow: inserted, paymentIntent: { id: pi.id, status: pi.status } }, 201);
+});
+
+// Lock escrow: pending → locked (after payment confirmation)
+app.post("/api/escrow/:id/lock", async (c) => {
+  try {
+    const updated = await lockEscrow(db, schema, c.req.param("id"));
+    return c.json(updated);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+// Release escrow: locked → released (SLA verified)
+app.post("/api/escrow/:id/release", async (c) => {
+  try {
+    const escrowRow = await releaseEscrow(db, schema, c.req.param("id"));
+
+    // Look up job + agent for Stripe transfer
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, escrowRow.jobId));
+    if (job) {
+      const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, job.agentId));
+      if (agent?.stripeAccountId) {
+        const transfer = await createTransfer(escrowRow.agentPayoutCents, agent.stripeAccountId, {
+          escrowId: escrowRow.id,
+          jobId: job.id,
+        });
+        await db
+          .update(schema.escrow)
+          .set({ stripeTransferId: transfer.id })
+          .where(eq(schema.escrow.id, escrowRow.id));
+      }
+    }
+
+    return c.json(escrowRow);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+// Refund escrow: locked → refunded (SLA miss, tiered)
+app.post("/api/escrow/:id/refund", async (c) => {
+  try {
+    const { slaPct, milestonesHit } = await c.req.json();
+    if (slaPct === undefined || milestonesHit === undefined) {
+      return c.json({ error: "slaPct and milestonesHit are required" }, 400);
+    }
+    const escrowRow = await refundEscrow(db, schema, c.req.param("id"), slaPct, milestonesHit);
+
+    // Process Stripe refund if payment intent exists and refund amount > 0
+    if (escrowRow.stripePaymentIntentId && escrowRow.refundAmountCents > 0) {
+      const refund = await createRefund(escrowRow.stripePaymentIntentId, escrowRow.refundAmountCents);
+      await db
+        .update(schema.escrow)
+        .set({ stripeRefundId: refund.id })
+        .where(eq(schema.escrow.id, escrowRow.id));
+    }
+
+    return c.json(escrowRow);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+// Preview refund calculation without executing
+app.post("/api/escrow/preview-refund", async (c) => {
+  const { amountCents, slaPct, milestonesHit } = await c.req.json();
+  if (amountCents === undefined || slaPct === undefined || milestonesHit === undefined) {
+    return c.json({ error: "amountCents, slaPct, and milestonesHit are required" }, 400);
+  }
+  return c.json(calculateRefund(amountCents, slaPct, milestonesHit));
+});
+
+// ─── STRIPE CONNECT (agent builder onboarding) ───
+
+app.post("/api/connect/create-account", async (c) => {
+  const { agentId, email } = await c.req.json();
+  if (!agentId || !email) {
+    return c.json({ error: "agentId and email are required" }, 400);
+  }
+  const account = await createConnectAccount(email, { agentId });
+  await db.update(schema.agents).set({ stripeAccountId: account.id }).where(eq(schema.agents.id, agentId));
+  return c.json({ accountId: account.id });
+});
+
+app.post("/api/connect/onboarding-link", async (c) => {
+  const { accountId, refreshUrl, returnUrl } = await c.req.json();
+  if (!accountId) return c.json({ error: "accountId is required" }, 400);
+  const link = await createAccountLink(
+    accountId,
+    refreshUrl || "http://localhost:5173/dashboard",
+    returnUrl || "http://localhost:5173/dashboard",
+  );
+  return c.json({ url: link.url });
+});
+
+// ─── STRIPE WEBHOOKS ───
+
+app.post("/api/webhooks/stripe", async (c) => {
+  const signature = c.req.header("stripe-signature");
+  const body = await c.req.text();
+
+  const event = constructWebhookEvent(body, signature);
+  if (!event) {
+    // No Stripe configured or invalid signature — acknowledge anyway in dev
+    return c.json({ received: true, mode: "simulated" });
+  }
+
+  switch (event.type) {
+    case "payment_intent.succeeded": {
+      const pi = event.data.object;
+      // Find escrow by payment intent ID and lock it
+      const [esc] = await db
+        .select()
+        .from(schema.escrow)
+        .where(eq(schema.escrow.stripePaymentIntentId, pi.id));
+      if (esc && esc.state === "pending") {
+        await lockEscrow(db, schema, esc.id);
+      }
+      break;
+    }
+    case "payment_intent.payment_failed": {
+      // Log failure — escrow stays pending, SMB can retry
+      const pi = event.data.object;
+      console.warn(`Payment failed for PI ${pi.id}: ${pi.last_payment_error?.message}`);
+      break;
+    }
+  }
+
+  return c.json({ received: true });
+});
+
+// ─── STRIPE STATUS ───
+
+app.get("/api/stripe/status", (c) => {
+  return c.json({
+    enabled: isStripeEnabled(),
+    platformFeePct: PLATFORM_FEE_PCT,
+  });
 });
 
 // ─── METRICS ───

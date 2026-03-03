@@ -15,6 +15,8 @@ import {
   fetchScanPhases,
   fetchPipelineStages,
   fetchStatusCfg,
+  fetchEscrow,
+  fetchJobs,
 } from "../shared/api";
 
 const bgColor = bg;
@@ -1197,6 +1199,56 @@ const STATUS_CFG = {
   completed: { label: "Completed", color: "#78909C", bg: "rgba(120,144,156,.1)" },
 };
 
+// ─── ESCROW + JOBS FALLBACKS ───
+
+const JOBS_FALLBACK = [
+  {
+    id: "JOB-001",
+    intentId: "INT-002",
+    agentId: "agt-006",
+    status: "executing",
+    vertical: "SEO",
+    budgetCents: 180000,
+    milestonesTotal: 4,
+    milestonesHit: 1,
+  },
+  {
+    id: "JOB-002",
+    intentId: "INT-004",
+    agentId: "agt-001",
+    status: "executing",
+    vertical: "AIO",
+    budgetCents: 360000,
+    milestonesTotal: 5,
+    milestonesHit: 2,
+  },
+  {
+    id: "JOB-003",
+    intentId: "INT-005",
+    agentId: "agt-002",
+    status: "completed",
+    vertical: "AIO",
+    budgetCents: 90000,
+    costActualCents: 82800,
+    milestonesTotal: 3,
+    milestonesHit: 3,
+  },
+];
+
+const ESCROW_FALLBACK = [
+  { id: "ESC-001", jobId: "JOB-001", state: "locked", amountCents: 180000, currency: "USD", platformFeeCents: 0 },
+  { id: "ESC-002", jobId: "JOB-002", state: "locked", amountCents: 360000, currency: "USD", platformFeeCents: 0 },
+  {
+    id: "ESC-003",
+    jobId: "JOB-003",
+    state: "released",
+    amountCents: 90000,
+    currency: "USD",
+    platformFeeCents: 7200,
+    agentPayoutCents: 82800,
+  },
+];
+
 // ─── DATA CONTEXT ───
 // Provides API-fetched data (with inline fallbacks) to all sub-components.
 const DataContext = createContext(null);
@@ -1221,6 +1273,8 @@ function useData() {
       scanPhases: SCAN_PHASES,
       pipelineStages: PIPELINE_STAGES,
       statusCfg: STATUS_CFG,
+      escrowRecords: ESCROW_FALLBACK,
+      jobs: JOBS_FALLBACK,
     };
   }
   return ctx;
@@ -6541,22 +6595,125 @@ function Live({ mob, tab }) {
   );
 }
 
+// ─── ESCROW STATE DISPLAY CONFIG ───
+const ESCROW_STATE_CFG = {
+  pending: { label: "Pending", color: "#FFA726", bg: "rgba(255,167,38,.1)" },
+  locked: { label: "Locked", color: "#42A5F5", bg: "rgba(66,165,245,.1)" },
+  released: { label: "Released", color: "#66BB6A", bg: "rgba(102,187,106,.1)" },
+  refunded: { label: "Refunded", color: "#EF5350", bg: "rgba(239,83,80,.1)" },
+};
+
 // ─── ESCROW ───
 function Escrow({ mob }) {
-  const { intents: MOCK_INTENTS, statusCfg: STATUS_CFG } = useData();
-  const list = MOCK_INTENTS.filter((i) => ["engaged", "milestone", "completed"].includes(i.status));
+  const { escrowRecords, jobs, intents, agents } = useData();
+  const [stateFilter, setStateFilter] = useState("all");
+
+  // Build lookup maps for joining
+  const jobMap = useMemo(() => Object.fromEntries((jobs || []).map((j) => [j.id, j])), [jobs]);
+  const intentMap = useMemo(() => Object.fromEntries((intents || []).map((i) => [i.id, i])), [intents]);
+  const agentMap = useMemo(() => Object.fromEntries((agents || []).map((a) => [a.id, a])), [agents]);
+
+  // Join escrow → job → intent + agent
+  const enriched = useMemo(
+    () =>
+      (escrowRecords || []).map((esc) => {
+        const job = jobMap[esc.jobId] || {};
+        const intent = intentMap[job.intentId] || {};
+        const agent = agentMap[job.agentId] || {};
+        const prog =
+          job.milestonesTotal > 0
+            ? Math.round((job.milestonesHit / job.milestonesTotal) * 100)
+            : esc.state === "released"
+              ? 100
+              : 0;
+        return { ...esc, job, intent, agent, prog };
+      }),
+    [escrowRecords, jobMap, intentMap, agentMap],
+  );
+
+  const filtered = stateFilter === "all" ? enriched : enriched.filter((e) => e.state === stateFilter);
+
+  const totalLocked = enriched.filter((e) => e.state === "locked").reduce((s, e) => s + e.amountCents, 0);
+  const totalReleased = enriched.filter((e) => e.state === "released").reduce((s, e) => s + e.amountCents, 0);
+
+  const fmtUsd = (cents) => `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 0 })}`;
+
   return (
     <div>
       <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 22, fontWeight: 700, marginBottom: 6 }}>Escrow</h2>
       <p style={{ fontSize: 13, color: "rgba(255,255,255,.3)", marginBottom: mob ? 16 : 24 }}>
-        Funds held until milestone verification.
+        Funds held until milestone verification. SLA-backed tiered refunds on miss.
       </p>
+
+      {/* KPI strip */}
+      <div style={{ display: "flex", gap: mob ? 8 : 12, marginBottom: mob ? 16 : 20, flexWrap: "wrap" }}>
+        {[
+          { label: "Locked", value: fmtUsd(totalLocked), color: blue },
+          { label: "Released", value: fmtUsd(totalReleased), color: "#66BB6A" },
+          { label: "Records", value: enriched.length, color: "rgba(255,255,255,.5)" },
+        ].map((kpi) => (
+          <div
+            key={kpi.label}
+            style={{
+              flex: 1,
+              minWidth: mob ? 90 : 120,
+              background: "rgba(255,255,255,.02)",
+              border: "1px solid rgba(66,165,245,.07)",
+              borderRadius: 14,
+              padding: mob ? "10px 12px" : "12px 16px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                color: "rgba(255,255,255,.25)",
+                textTransform: "uppercase",
+                letterSpacing: ".08em",
+                marginBottom: 4,
+              }}
+            >
+              {kpi.label}
+            </div>
+            <div style={{ fontFamily: ft.display, fontSize: mob ? 18 : 22, fontWeight: 700, color: kpi.color }}>
+              {kpi.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* State filter */}
+      <div style={{ display: "flex", gap: 6, marginBottom: mob ? 14 : 18, flexWrap: "wrap" }}>
+        {["all", "pending", "locked", "released", "refunded"].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStateFilter(s)}
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: ".06em",
+              textTransform: "uppercase",
+              padding: "5px 12px",
+              borderRadius: 100,
+              border: "1px solid",
+              borderColor: stateFilter === s ? blue : "rgba(255,255,255,.08)",
+              background: stateFilter === s ? "rgba(66,165,245,.12)" : "transparent",
+              color: stateFilter === s ? blue : "rgba(255,255,255,.35)",
+              cursor: "pointer",
+            }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Escrow cards */}
       <div style={{ display: "grid", gap: mob ? 10 : 12 }}>
-        {list.map((intent) => {
-          const st = STATUS_CFG[intent.status];
-          const prog = intent.status === "completed" ? 100 : intent.status === "milestone" ? 55 : 15;
+        {filtered.map((esc) => {
+          const st = ESCROW_STATE_CFG[esc.state] || ESCROW_STATE_CFG.pending;
           return (
-            <Card key={intent.id} mob={mob}>
+            <Card key={esc.id} mob={mob}>
               <div
                 style={{
                   display: "flex",
@@ -6569,19 +6726,19 @@ function Escrow({ mob }) {
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: mob ? 14 : 15, fontWeight: 700 }}>{intent.business}</span>
-                    <VBadge v={intent.vertical} />
+                    <span style={{ fontSize: mob ? 14 : 15, fontWeight: 700 }}>{esc.intent.business || esc.jobId}</span>
+                    {esc.job.vertical && <VBadge v={esc.job.vertical} />}
                     <Badge color={st.color} bg={st.bg}>
                       {st.label}
                     </Badge>
                   </div>
                   <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.22)" }}>
-                    Agent: {intent.agent} · {intent.id}
+                    Agent: {esc.agent.name || "—"} · {esc.id} · {esc.job.id || ""}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontFamily: ft.mono, fontSize: mob ? 14 : 16, fontWeight: 700, color: blue }}>
-                    {intent.budget}
+                  <div style={{ fontFamily: ft.mono, fontSize: mob ? 14 : 16, fontWeight: 700, color: st.color }}>
+                    {fmtUsd(esc.amountCents)}
                   </div>
                   <div
                     style={{
@@ -6591,48 +6748,93 @@ function Escrow({ mob }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Escrow
+                    {esc.currency}
                   </div>
                 </div>
               </div>
-              {intent.milestone && (
+
+              {/* Payout breakdown for released/refunded */}
+              {(esc.state === "released" || esc.state === "refunded") && (
                 <div
                   style={{
                     fontSize: 11,
                     color: "rgba(255,255,255,.35)",
-                    background: "rgba(100,181,246,.03)",
-                    border: "1px solid rgba(100,181,246,.07)",
+                    background: `${st.color}08`,
+                    border: `1px solid ${st.color}15`,
                     borderRadius: 8,
                     padding: "8px 12px",
                     marginBottom: 12,
+                    display: "flex",
+                    gap: 16,
+                    flexWrap: "wrap",
                   }}
                 >
-                  <span
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "#64B5F6",
-                      textTransform: "uppercase",
-                      letterSpacing: ".06em",
-                    }}
-                  >
-                    Milestone:{" "}
-                  </span>
-                  {intent.milestone}
+                  {esc.agentPayoutCents != null && (
+                    <span>
+                      <span
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 8,
+                          color: "#66BB6A",
+                          textTransform: "uppercase",
+                          letterSpacing: ".06em",
+                        }}
+                      >
+                        Agent Payout:{" "}
+                      </span>
+                      {fmtUsd(esc.agentPayoutCents)}
+                    </span>
+                  )}
+                  {esc.platformFeeCents > 0 && (
+                    <span>
+                      <span
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 8,
+                          color: blue,
+                          textTransform: "uppercase",
+                          letterSpacing: ".06em",
+                        }}
+                      >
+                        Platform Fee:{" "}
+                      </span>
+                      {fmtUsd(esc.platformFeeCents)}
+                    </span>
+                  )}
+                  {esc.refundAmountCents > 0 && (
+                    <span>
+                      <span
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 8,
+                          color: "#EF5350",
+                          textTransform: "uppercase",
+                          letterSpacing: ".06em",
+                        }}
+                      >
+                        Refund:{" "}
+                      </span>
+                      {fmtUsd(esc.refundAmountCents)} ({esc.refundTier})
+                    </span>
+                  )}
                 </div>
               )}
+
+              {/* Milestone progress bar */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, height: 5, borderRadius: 3, background: "rgba(255,255,255,.04)" }}>
                   <div
                     style={{
-                      width: `${prog}%`,
+                      width: `${esc.prog}%`,
                       height: "100%",
                       borderRadius: 3,
-                      background: `linear-gradient(90deg, ${blueDeep}, ${blue})`,
+                      background: `linear-gradient(90deg, ${blueDeep}, ${st.color})`,
                     }}
                   />
                 </div>
-                <span style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)" }}>{prog}%</span>
+                <span style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)" }}>
+                  {esc.job.milestonesHit || 0}/{esc.job.milestonesTotal || 0}
+                </span>
               </div>
             </Card>
           );
@@ -6661,6 +6863,8 @@ export default function MarketplaceApp() {
   const { data: apiScanPhases } = useApiData(fetchScanPhases, SCAN_PHASES);
   const { data: apiPipelineStages } = useApiData(fetchPipelineStages, PIPELINE_STAGES);
   const { data: apiStatusCfg } = useApiData(fetchStatusCfg, STATUS_CFG);
+  const { data: apiEscrow } = useApiData(fetchEscrow, ESCROW_FALLBACK);
+  const { data: apiJobs } = useApiData(fetchJobs, JOBS_FALLBACK);
 
   const dataCtx = useMemo(
     () => ({
@@ -6679,6 +6883,8 @@ export default function MarketplaceApp() {
       scanPhases: apiScanPhases,
       pipelineStages: apiPipelineStages,
       statusCfg: apiStatusCfg,
+      escrowRecords: apiEscrow,
+      jobs: apiJobs,
     }),
     [
       apiAgents,
@@ -6693,6 +6899,8 @@ export default function MarketplaceApp() {
       apiScanPhases,
       apiPipelineStages,
       apiStatusCfg,
+      apiEscrow,
+      apiJobs,
     ],
   );
 

@@ -31,6 +31,8 @@ a2a4a/
 ├── server/                # Hono backend API
 │   ├── index.js           # Hono app with all API routes
 │   ├── auth.js            # Better Auth config (email/password, roles)
+│   ├── stripe.js          # Stripe SDK wrapper (PaymentIntents, Transfers, Refunds, Connect)
+│   ├── escrow.js          # Escrow state machine + tiered refund calculator
 │   └── db/
 │       ├── index.js       # Drizzle client + connection
 │       ├── schema.js      # Drizzle table definitions (agents, intents, transactions, etc.)
@@ -116,7 +118,20 @@ The API server runs on port 3001 (configurable via `PORT` env var). Vite proxies
 | `POST` | `/api/intents` | Create new intent |
 | `GET` | `/api/transactions` | Transaction history |
 | `GET` | `/api/signals` | Live auction signal feed |
-| `GET` | `/api/escrow` | Escrow view (derived from intents) |
+| `GET` | `/api/jobs` | All jobs |
+| `GET` | `/api/jobs/:id` | Single job by ID |
+| `POST` | `/api/jobs` | Create new job |
+| `GET` | `/api/escrow` | All escrow records |
+| `GET` | `/api/escrow/:id` | Single escrow record |
+| `POST` | `/api/escrow` | Create escrow + Stripe PaymentIntent |
+| `POST` | `/api/escrow/:id/lock` | Lock escrow (pending → locked) |
+| `POST` | `/api/escrow/:id/release` | Release funds (locked → released) |
+| `POST` | `/api/escrow/:id/refund` | Tiered refund (locked → refunded) |
+| `POST` | `/api/escrow/preview-refund` | Preview refund calculation |
+| `POST` | `/api/connect/create-account` | Create Stripe Connect account |
+| `POST` | `/api/connect/onboarding-link` | Generate Connect onboarding URL |
+| `POST` | `/api/webhooks/stripe` | Stripe webhook handler |
+| `GET` | `/api/stripe/status` | Stripe enabled check |
 | `GET` | `/api/metrics` | Revenue months, perf metrics, vertical split, trending |
 | `GET` | `/api/intent-market` | Intent market analysis data |
 | `GET` | `/api/intent-categories` | Industry category aggregates |
@@ -135,9 +150,9 @@ Static/config data (PERF_METRICS, VERTICAL_SPLIT, TRENDING_UP, WRAPPER_SPEC, SCA
 
 ### `server/db/schema.js` — Drizzle Schema
 
-**Tables:** `user`, `session`, `account`, `verification` (auth), `agents`, `intents`, `transactions`, `signals`, `intent_market`, `sla_templates`, `revenue_months`, `intent_categories`
+**Tables:** `user`, `session`, `account`, `verification` (auth), `agents`, `intents`, `transactions`, `signals`, `intent_market`, `sla_templates`, `revenue_months`, `intent_categories`, `jobs`, `escrow`
 
-**Enums:** `user_role` (smb/builder), `vertical` (SEO/AIO), `agent_status`, `intent_status`, `txn_type`, `txn_status`, `currency`, `signal_status`, `aio_pos`, `escrow_state`
+**Enums:** `user_role` (smb/builder), `vertical` (SEO/AIO), `agent_status`, `intent_status`, `txn_type` (clearing/milestone/refund/escrow_lock/escrow_release/cpe_bid), `txn_status`, `currency`, `signal_status`, `aio_pos`, `escrow_state`, `job_status` (created/executing/completed/failed/cancelled)
 
 Complex nested data (capabilities, SLA params, policies, eval claims, schemas) is stored as `jsonb` columns.
 
@@ -534,7 +549,8 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 - Drizzle config (`drizzle.config.js`) with migration support via `drizzle-kit`
 - Seed script (`server/db/seed.js`) populated from current mock data constants
 - API routes use Drizzle queries against PostgreSQL
-- **Deferred to Phase 5:** `users` table, `jobs` table (JobSpec lifecycle), `escrow` state machine table
+- **Deferred to Phase 5:** `users` table (auth)
+- **Now in Phase 6:** `jobs` table (JobSpec lifecycle), `escrow` state machine table
 
 ### Phase 5: Auth — Better Auth ✅
 - Better Auth with Drizzle adapter + Postgres (`server/auth.js`)
@@ -548,15 +564,23 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 - Demo users seeded: `smb@demo.com` / `builder@demo.com` (password: `password123`)
 - Schema: `user`, `session`, `account`, `verification` tables with proper indexes
 
-### Phase 6: Escrow + Payments — Stripe (1–2 weeks)
-- Stripe Connect for agent builder payouts
-- Payment intents for job funding (SMB pays → escrow locks)
-- Escrow state machine in backend:
-  - `pending` → SMB approves cost → `locked`
-  - Job completes + SLA passes → `released`
-  - SLA miss → tiered refund (<25% target = full refund, 25–75% = 50%, >75% = none)
-  - Floor only on partial delivery (≥1 milestone hit)
-- Stripe webhook handlers for payment events
+### Phase 6: Escrow + Payments — Stripe ✅
+- Schema: `jobs` table (JobSpec lifecycle), `escrow` table (state machine with tiered refunds)
+- `server/stripe.js` — Stripe SDK wrapper: PaymentIntents, Transfers (Connect), Refunds, account onboarding. Simulated mode when `STRIPE_SECRET_KEY` not set.
+- `server/escrow.js` — State machine (`pending → locked → released | refunded`), tiered refund calculator (<25% SLA = full refund, 25–75% = 50%, >75% = none, 0 milestones = total failure)
+- API routes:
+  - `GET/POST /api/jobs` — Job CRUD
+  - `GET/POST /api/escrow` — Escrow CRUD + PaymentIntent creation
+  - `POST /api/escrow/:id/lock` — Lock escrow (pending → locked)
+  - `POST /api/escrow/:id/release` — Release funds to agent (locked → released) + Stripe Transfer
+  - `POST /api/escrow/:id/refund` — Tiered refund (locked → refunded) + Stripe Refund
+  - `POST /api/escrow/preview-refund` — Preview refund calculation
+  - `POST /api/connect/create-account` — Create Stripe Connect account for agent builder
+  - `POST /api/connect/onboarding-link` — Generate Connect onboarding URL
+  - `POST /api/webhooks/stripe` — Webhook handler (payment_intent.succeeded → auto-lock)
+  - `GET /api/stripe/status` — Stripe enabled check + platform fee %
+- Frontend: Escrow tab now renders real escrow records with state filter, KPI strip (locked/released totals), payout breakdown (agent payout, platform fee, refund tier)
+- Seed data: 3 jobs + 3 escrow records (locked, locked, released) linked to existing intents
 - USD/Stripe only for MVP — USDC deferred to token launch phase
 
 ### Phase 7: Docker + Deployment (3–5 days)

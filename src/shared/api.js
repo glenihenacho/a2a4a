@@ -11,6 +11,16 @@ async function fetchJson(path) {
   return res.json();
 }
 
+async function postJson(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`API POST ${path}: ${res.status}`);
+  return res.json();
+}
+
 // ─── AGENTS ───
 
 export async function fetchAgents() {
@@ -39,10 +49,52 @@ export async function fetchSignals() {
   return fetchJson("/signals");
 }
 
+// ─── JOBS ───
+
+export async function fetchJobs() {
+  return fetchJson("/jobs");
+}
+
+export async function fetchJob(id) {
+  return fetchJson(`/jobs/${id}`);
+}
+
+export async function createJob(data) {
+  return postJson("/jobs", data);
+}
+
 // ─── ESCROW ───
 
 export async function fetchEscrow() {
   return fetchJson("/escrow");
+}
+
+export async function fetchEscrowById(id) {
+  return fetchJson(`/escrow/${id}`);
+}
+
+export async function createEscrow(data) {
+  return postJson("/escrow", data);
+}
+
+export async function lockEscrowApi(id) {
+  return postJson(`/escrow/${id}/lock`);
+}
+
+export async function releaseEscrowApi(id) {
+  return postJson(`/escrow/${id}/release`);
+}
+
+export async function refundEscrowApi(id, data) {
+  return postJson(`/escrow/${id}/refund`, data);
+}
+
+export async function previewRefund(data) {
+  return postJson("/escrow/preview-refund", data);
+}
+
+export async function fetchStripeStatus() {
+  return fetchJson("/stripe/status");
 }
 
 // ─── METRICS ───

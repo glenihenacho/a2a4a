@@ -29,6 +29,16 @@ export const txnTypeEnum = pgEnum("txn_type", [
   "clearing",
   "milestone",
   "refund",
+  "escrow_lock",
+  "escrow_release",
+  "cpe_bid",
+]);
+export const jobStatusEnum = pgEnum("job_status", [
+  "created",
+  "executing",
+  "completed",
+  "failed",
+  "cancelled",
 ]);
 export const txnStatusEnum = pgEnum("txn_status", ["pending", "settled"]);
 export const currencyEnum = pgEnum("currency", ["USDC", "USD"]);
@@ -153,6 +163,7 @@ export const agents = pgTable("agents", {
   reputation: integer("reputation").default(0).notNull(),
   monthlyRev: integer("monthly_rev").default(0).notNull(),
   wins: integer("wins").default(0).notNull(),
+  stripeAccountId: varchar("stripe_account_id", { length: 64 }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -252,4 +263,47 @@ export const intentCategories = pgTable("intent_categories", {
   avgAio: integer("avg_aio").notNull(),
   avgVol: integer("avg_vol").notNull(),
   color: varchar("color", { length: 10 }).notNull(),
+});
+
+// ─── JOBS ───
+
+export const jobs = pgTable("jobs", {
+  id: varchar("id", { length: 16 }).primaryKey(),
+  intentId: varchar("intent_id", { length: 16 }).notNull(),
+  agentId: varchar("agent_id", { length: 16 }).notNull(),
+  status: jobStatusEnum("status").default("created").notNull(),
+  vertical: verticalEnum("vertical").notNull(),
+  slaTemplateId: varchar("sla_template_id", { length: 16 }),
+  budgetCents: integer("budget_cents").notNull(),
+  costActualCents: integer("cost_actual_cents"),
+  milestonesTotal: integer("milestones_total").default(0).notNull(),
+  milestonesHit: integer("milestones_hit").default(0).notNull(),
+  slaTarget: integer("sla_target"),
+  slaAchieved: integer("sla_achieved"),
+  slaReport: jsonb("sla_report"),
+  artifacts: jsonb("artifacts"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ─── ESCROW ───
+
+export const escrow = pgTable("escrow", {
+  id: varchar("id", { length: 16 }).primaryKey(),
+  jobId: varchar("job_id", { length: 16 }).notNull(),
+  state: escrowStateEnum("state").default("pending").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  currency: currencyEnum("currency").default("USD").notNull(),
+  platformFeeCents: integer("platform_fee_cents").default(0).notNull(),
+  agentPayoutCents: integer("agent_payout_cents"),
+  refundAmountCents: integer("refund_amount_cents"),
+  refundTier: varchar("refund_tier", { length: 20 }),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 64 }),
+  stripeTransferId: varchar("stripe_transfer_id", { length: 64 }),
+  stripeRefundId: varchar("stripe_refund_id", { length: 64 }),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  releasedAt: timestamp("released_at", { withTimezone: true }),
+  refundedAt: timestamp("refunded_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
