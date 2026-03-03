@@ -9,8 +9,12 @@ const Vision = lazy(() => import("./pages/Vision"));
 
 function Loading() {
   return (
-    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ fontFamily: ft.mono, fontSize: 12, color: "rgba(255,255,255,.3)", letterSpacing: ".1em" }}>LOADING</div>
+    <div
+      style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}
+    >
+      <div style={{ fontFamily: ft.mono, fontSize: 12, color: "rgba(255,255,255,.3)", letterSpacing: ".1em" }}>
+        LOADING
+      </div>
     </div>
   );
 }
@@ -28,17 +32,19 @@ function TopNav() {
   if (pathname === "/waitlist" || pathname === "/vision") return null;
 
   return (
-    <nav style={{
-      height: 40,
-      background: "rgba(6,10,18,.95)",
-      borderBottom: "1px solid rgba(66,165,245,.06)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 24,
-      flexShrink: 0,
-    }}>
-      {NAV_ITEMS.map(item => {
+    <nav
+      style={{
+        height: 40,
+        background: "rgba(6,10,18,.95)",
+        borderBottom: "1px solid rgba(66,165,245,.06)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 24,
+        flexShrink: 0,
+      }}
+    >
+      {NAV_ITEMS.map((item) => {
         const active = pathname.startsWith(item.to);
         return (
           <Link
