@@ -6,3 +6,4 @@ dist
 .eslintcache
 test-results/
 playwright-report/
+server/db/migrations/meta/

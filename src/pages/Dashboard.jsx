@@ -1,7 +1,21 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } from "react";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
-import { useMedia } from "../shared/hooks";
+import { useMedia, useApiData } from "../shared/hooks";
 import { Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart } from "../shared/primitives";
+import {
+  fetchAgents,
+  fetchIntents,
+  fetchTransactions,
+  fetchSignals,
+  fetchMetrics,
+  fetchIntentMarket,
+  fetchIntentCategories,
+  fetchSlaTemplates,
+  fetchWrapperSpec,
+  fetchScanPhases,
+  fetchPipelineStages,
+  fetchStatusCfg,
+} from "../shared/api";
 
 const bgColor = bg;
 
@@ -1183,8 +1197,44 @@ const STATUS_CFG = {
   completed: { label: "Completed", color: "#78909C", bg: "rgba(120,144,156,.1)" },
 };
 
+// ─── DATA CONTEXT ───
+// Provides API-fetched data (with inline fallbacks) to all sub-components.
+const DataContext = createContext(null);
+
+function useData() {
+  const ctx = useContext(DataContext);
+  // If no provider, return the inline fallback constants (backwards compat)
+  if (!ctx) {
+    return {
+      agents: MOCK_AGENTS,
+      intents: MOCK_INTENTS,
+      transactions: TRANSACTIONS,
+      signals: LIVE_SIGNALS,
+      revenueMonths: REVENUE_MONTHS,
+      perfMetrics: PERF_METRICS,
+      verticalSplit: VERTICAL_SPLIT,
+      trendingUp: TRENDING_UP,
+      intentMarket: INTENT_MARKET,
+      intentCategories: INTENT_CATEGORIES,
+      slaTemplates: SLA_TEMPLATES,
+      wrapperSpec: WRAPPER_SPEC,
+      scanPhases: SCAN_PHASES,
+      pipelineStages: PIPELINE_STAGES,
+      statusCfg: STATUS_CFG,
+    };
+  }
+  return ctx;
+}
+
 // ─── DASHBOARD ───
 function Dashboard({ mob, tab }) {
+  const {
+    transactions: TRANSACTIONS,
+    revenueMonths: REVENUE_MONTHS,
+    perfMetrics: PERF_METRICS,
+    verticalSplit: VERTICAL_SPLIT,
+    intents: MOCK_INTENTS,
+  } = useData();
   const [txnFilter, setTxnFilter] = useState("all");
   const [perfVert, setPerfVert] = useState("all");
   const filteredTxns = txnFilter === "all" ? TRANSACTIONS : TRANSACTIONS.filter((t) => t.type === txnFilter);
@@ -1736,6 +1786,13 @@ function Dashboard({ mob, tab }) {
 
 // ─── INTENTS (Market Data) ───
 function Intents({ mob, tab }) {
+  const {
+    intentMarket: INTENT_MARKET,
+    intentCategories: INTENT_CATEGORIES,
+    trendingUp: TRENDING_UP,
+    slaTemplates: SLA_TEMPLATES,
+    agents: MOCK_AGENTS,
+  } = useData();
   const [industryTags, setIndustryTags] = useState([]);
   const [industryQuery, setIndustryQuery] = useState("");
   const [industryFocused, setIndustryFocused] = useState(false);
@@ -1755,7 +1812,7 @@ function Intents({ mob, tab }) {
     return INTENT_CATEGORIES.filter((c) => !industryTags.some((t) => t.name === c.name))
       .filter((c) => !q || c.name.toLowerCase().includes(q))
       .slice(0, 6);
-  }, [industryQuery, industryTags]);
+  }, [industryQuery, industryTags, INTENT_CATEGORIES]);
 
   const addIndustry = (cat) => {
     if (!industryTags.some((t) => t.name === cat.name)) setIndustryTags((p) => [...p, cat]);
@@ -5103,6 +5160,12 @@ function NewAgentFlow({ mob, onClose }) {
 
 // ─── AGENT REGISTRY ───
 function Agents({ mob, tab }) {
+  const {
+    agents: MOCK_AGENTS,
+    wrapperSpec: WRAPPER_SPEC,
+    scanPhases: SCAN_PHASES,
+    pipelineStages: PIPELINE_STAGES,
+  } = useData();
   const [query, setQuery] = useState("");
   const [tags, setTags] = useState([]);
   const [committed, setCommitted] = useState([]);
@@ -5122,7 +5185,7 @@ function Agents({ mob, tab }) {
       s.set(`s:${a.status}`, { label: a.status, type: "status", icon: a.status === "live" ? "●" : "◐" });
     });
     return [...s.values()];
-  }, []);
+  }, [MOCK_AGENTS]);
 
   /* ── filtered suggestions based on current query ── */
   const suggestions = useMemo(() => {
@@ -5768,6 +5831,7 @@ function PulsingDot({ color, pulse }) {
 }
 
 function Live({ mob, tab }) {
+  const { signals: LIVE_SIGNALS } = useData();
   const [sort, setSort] = useState("signal");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
@@ -6479,6 +6543,7 @@ function Live({ mob, tab }) {
 
 // ─── ESCROW ───
 function Escrow({ mob }) {
+  const { intents: MOCK_INTENTS, statusCfg: STATUS_CFG } = useData();
   const list = MOCK_INTENTS.filter((i) => ["engaged", "milestone", "completed"].includes(i.status));
   return (
     <div>
@@ -6583,6 +6648,54 @@ export default function MarketplaceApp() {
   const [page, setPage] = useState("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // ─── API data fetching with inline fallbacks ───
+  const { data: apiAgents } = useApiData(fetchAgents, MOCK_AGENTS);
+  const { data: apiIntents } = useApiData(fetchIntents, MOCK_INTENTS);
+  const { data: apiTransactions } = useApiData(fetchTransactions, TRANSACTIONS);
+  const { data: apiSignals } = useApiData(fetchSignals, LIVE_SIGNALS);
+  const { data: apiMetrics } = useApiData(fetchMetrics, null);
+  const { data: apiIntentMarket } = useApiData(fetchIntentMarket, INTENT_MARKET);
+  const { data: apiIntentCategories } = useApiData(fetchIntentCategories, INTENT_CATEGORIES);
+  const { data: apiSlaTemplates } = useApiData(fetchSlaTemplates, SLA_TEMPLATES);
+  const { data: apiWrapperSpec } = useApiData(fetchWrapperSpec, WRAPPER_SPEC);
+  const { data: apiScanPhases } = useApiData(fetchScanPhases, SCAN_PHASES);
+  const { data: apiPipelineStages } = useApiData(fetchPipelineStages, PIPELINE_STAGES);
+  const { data: apiStatusCfg } = useApiData(fetchStatusCfg, STATUS_CFG);
+
+  const dataCtx = useMemo(
+    () => ({
+      agents: apiAgents,
+      intents: apiIntents,
+      transactions: apiTransactions,
+      signals: apiSignals,
+      revenueMonths: apiMetrics?.revenue || REVENUE_MONTHS,
+      perfMetrics: apiMetrics?.perf || PERF_METRICS,
+      verticalSplit: apiMetrics?.verticalSplit || VERTICAL_SPLIT,
+      trendingUp: apiMetrics?.trendingUp || TRENDING_UP,
+      intentMarket: apiIntentMarket,
+      intentCategories: apiIntentCategories,
+      slaTemplates: apiSlaTemplates,
+      wrapperSpec: apiWrapperSpec,
+      scanPhases: apiScanPhases,
+      pipelineStages: apiPipelineStages,
+      statusCfg: apiStatusCfg,
+    }),
+    [
+      apiAgents,
+      apiIntents,
+      apiTransactions,
+      apiSignals,
+      apiMetrics,
+      apiIntentMarket,
+      apiIntentCategories,
+      apiSlaTemplates,
+      apiWrapperSpec,
+      apiScanPhases,
+      apiPipelineStages,
+      apiStatusCfg,
+    ],
+  );
+
   const navItems = [
     { key: "dashboard", icon: "◎", label: "Dashboard" },
     { key: "intents", icon: "◉", label: "Market" },
@@ -6605,235 +6718,77 @@ export default function MarketplaceApp() {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: mob ? "column" : "row",
-        height: "100vh",
-        background: bgColor,
-        color: "#E3F2FD",
-        fontFamily: ft.sans,
-        overflow: "hidden",
-        position: "relative",
-      }}
-    >
-      {/* Global styles now in index.html */}
+    <DataContext.Provider value={dataCtx}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: mob ? "column" : "row",
+          height: "100vh",
+          background: bgColor,
+          color: "#E3F2FD",
+          fontFamily: ft.sans,
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {/* Global styles now in index.html */}
 
-      {/* ─── MOBILE TOP BAR ─── */}
-      {mob && (
-        <div
-          style={{
-            height: 52,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "0 16px",
-            borderBottom: "1px solid rgba(66,165,245,.06)",
-            flexShrink: 0,
-            background: "rgba(7,11,20,.95)",
-            backdropFilter: "blur(12px)",
-            WebkitBackdropFilter: "blur(12px)",
-            zIndex: 50,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 6,
-                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg viewBox="0 0 32 32" width="16" height="16" fill="none">
-                <path d="M16 3 L5 19 L11 19 L16 11 L21 19 L27 19Z" fill="#fff" opacity=".85" />
-                <path d="M16 12 L10 20.5 L16 29 L22 20.5Z" fill="#90CAF9" opacity=".6" />
-              </svg>
-            </div>
-            <span style={{ fontFamily: ft.display, fontWeight: 700, fontSize: 15 }}>
-              agentic<span style={{ color: blue }}>proxies</span>
-            </span>
-            <Badge color="rgba(255,255,255,.25)" bg="rgba(66,165,245,.06)">
-              MVP
-            </Badge>
-          </div>
-          <button
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: "rgba(255,255,255,.03)",
-              border: "1px solid rgba(255,255,255,.06)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
-              <path
-                d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
-                stroke="rgba(255,255,255,.35)"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* ─── DESKTOP SIDEBAR ─── */}
-      {!mob && (
-        <div
-          style={{
-            width: tab ? 200 : 240,
-            borderRight: "1px solid rgba(66,165,245,.06)",
-            display: "flex",
-            flexDirection: "column",
-            background: "rgba(255,255,255,.006)",
-            flexShrink: 0,
-          }}
-        >
+        {/* ─── MOBILE TOP BAR ─── */}
+        {mob && (
           <div
             style={{
-              padding: "18px 14px",
+              height: 52,
               display: "flex",
               alignItems: "center",
-              gap: 10,
+              justifyContent: "space-between",
+              padding: "0 16px",
               borderBottom: "1px solid rgba(66,165,245,.06)",
+              flexShrink: 0,
+              background: "rgba(7,11,20,.95)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              zIndex: 50,
             }}
           >
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                boxShadow: "0 0 10px rgba(33,150,243,.25)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <svg viewBox="0 0 32 32" width="18" height="18" fill="none">
-                <path d="M16 3 L5 19 L11 19 L16 11 L21 19 L27 19Z" fill="#fff" opacity=".85" />
-                <path d="M16 12 L10 20.5 L16 29 L22 20.5Z" fill="#90CAF9" opacity=".6" />
-              </svg>
-            </div>
-            <span style={{ fontFamily: ft.display, fontWeight: 700, fontSize: 15, whiteSpace: "nowrap" }}>
-              agentic<span style={{ color: blue }}>proxies</span>
-            </span>
-            <Badge color="rgba(255,255,255,.25)" bg="rgba(66,165,245,.06)">
-              MVP
-            </Badge>
-          </div>
-          <div style={{ padding: "10px 0", flex: 1, overflowY: "auto" }}>
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 9,
-                fontWeight: 600,
-                color: "rgba(255,255,255,.12)",
-                letterSpacing: ".15em",
-                textTransform: "uppercase",
-                padding: "8px 14px",
-              }}
-            >
-              Platform
-            </div>
-            {navItems.slice(0, 3).map((n) => (
-              <button
-                key={n.key}
-                onClick={() => go(n.key)}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
                 style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 6,
+                  background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
-                  padding: "10px 14px",
-                  background: page === n.key ? "rgba(66,165,245,.06)" : "transparent",
-                  border: "none",
-                  borderLeft: page === n.key ? `2px solid ${blue}` : "2px solid transparent",
-                  color: page === n.key ? "#E3F2FD" : "rgba(227,242,253,.35)",
-                  cursor: "pointer",
-                  fontFamily: ft.sans,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  width: "100%",
-                  textAlign: "left",
+                  justifyContent: "center",
                 }}
               >
-                <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{n.icon}</span>
-                {n.label}
-              </button>
-            ))}
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 9,
-                fontWeight: 600,
-                color: "rgba(255,255,255,.12)",
-                letterSpacing: ".15em",
-                textTransform: "uppercase",
-                padding: "14px 14px 8px",
-              }}
-            >
-              Network
+                <svg viewBox="0 0 32 32" width="16" height="16" fill="none">
+                  <path d="M16 3 L5 19 L11 19 L16 11 L21 19 L27 19Z" fill="#fff" opacity=".85" />
+                  <path d="M16 12 L10 20.5 L16 29 L22 20.5Z" fill="#90CAF9" opacity=".6" />
+                </svg>
+              </div>
+              <span style={{ fontFamily: ft.display, fontWeight: 700, fontSize: 15 }}>
+                agentic<span style={{ color: blue }}>proxies</span>
+              </span>
+              <Badge color="rgba(255,255,255,.25)" bg="rgba(66,165,245,.06)">
+                MVP
+              </Badge>
             </div>
-            {navItems.slice(3).map((n) => (
-              <button
-                key={n.key}
-                onClick={() => go(n.key)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 14px",
-                  background: page === n.key ? "rgba(66,165,245,.06)" : "transparent",
-                  border: "none",
-                  borderLeft: page === n.key ? `2px solid ${blue}` : "2px solid transparent",
-                  color: page === n.key ? "#E3F2FD" : "rgba(227,242,253,.35)",
-                  cursor: "pointer",
-                  fontFamily: ft.sans,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  width: "100%",
-                  textAlign: "left",
-                }}
-              >
-                <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{n.icon}</span>
-                {n.label}
-              </button>
-            ))}
-          </div>
-          <div
-            style={{
-              padding: "10px 14px",
-              borderTop: "1px solid rgba(66,165,245,.06)",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-            }}
-          >
-            <div
+            <button
               style={{
-                width: 30,
-                height: 30,
+                width: 32,
+                height: 32,
                 borderRadius: 8,
                 background: "rgba(255,255,255,.03)",
                 border: "1px solid rgba(255,255,255,.06)",
+                cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
                 <path
                   d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
@@ -6842,77 +6797,154 @@ export default function MarketplaceApp() {
                   strokeLinecap="round"
                 />
               </svg>
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontFamily: ft.sans,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,.5)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Operator
-              </div>
-              <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>
-                admin@agenticproxies.com
-              </div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, cursor: "pointer" }}>
-              <path
-                d="M12 13a1 1 0 100-2 1 1 0 000 2zm0-5a1 1 0 100-2 1 1 0 000 2zm0 10a1 1 0 100-2 1 1 0 000 2z"
-                fill="rgba(255,255,255,.2)"
-              />
-            </svg>
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ─── MAIN CONTENT ─── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+        {/* ─── DESKTOP SIDEBAR ─── */}
         {!mob && (
           <div
             style={{
-              height: 52,
-              borderBottom: "1px solid rgba(66,165,245,.06)",
+              width: tab ? 200 : 240,
+              borderRight: "1px solid rgba(66,165,245,.06)",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "0 24px",
+              flexDirection: "column",
+              background: "rgba(255,255,255,.006)",
               flexShrink: 0,
             }}
           >
-            <span style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>
-              {navItems.find((n) => n.key === page)?.label || page}
-            </span>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.18)" }}>
-                agenticproxies.com
-              </div>
+            <div
+              style={{
+                padding: "18px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                borderBottom: "1px solid rgba(66,165,245,.06)",
+              }}
+            >
               <div
                 style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: blue,
-                  boxShadow: `0 0 8px rgba(66,165,245,.4)`,
-                }}
-              />
-              <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
-              <button
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 7,
-                  background: "rgba(255,255,255,.03)",
-                  border: "1px solid rgba(255,255,255,.06)",
-                  cursor: "pointer",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                  boxShadow: "0 0 10px rgba(33,150,243,.25)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg viewBox="0 0 32 32" width="18" height="18" fill="none">
+                  <path d="M16 3 L5 19 L11 19 L16 11 L21 19 L27 19Z" fill="#fff" opacity=".85" />
+                  <path d="M16 12 L10 20.5 L16 29 L22 20.5Z" fill="#90CAF9" opacity=".6" />
+                </svg>
+              </div>
+              <span style={{ fontFamily: ft.display, fontWeight: 700, fontSize: 15, whiteSpace: "nowrap" }}>
+                agentic<span style={{ color: blue }}>proxies</span>
+              </span>
+              <Badge color="rgba(255,255,255,.25)" bg="rgba(66,165,245,.06)">
+                MVP
+              </Badge>
+            </div>
+            <div style={{ padding: "10px 0", flex: 1, overflowY: "auto" }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.12)",
+                  letterSpacing: ".15em",
+                  textTransform: "uppercase",
+                  padding: "8px 14px",
+                }}
+              >
+                Platform
+              </div>
+              {navItems.slice(0, 3).map((n) => (
+                <button
+                  key={n.key}
+                  onClick={() => go(n.key)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    background: page === n.key ? "rgba(66,165,245,.06)" : "transparent",
+                    border: "none",
+                    borderLeft: page === n.key ? `2px solid ${blue}` : "2px solid transparent",
+                    color: page === n.key ? "#E3F2FD" : "rgba(227,242,253,.35)",
+                    cursor: "pointer",
+                    fontFamily: ft.sans,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    width: "100%",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{n.icon}</span>
+                  {n.label}
+                </button>
+              ))}
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.12)",
+                  letterSpacing: ".15em",
+                  textTransform: "uppercase",
+                  padding: "14px 14px 8px",
+                }}
+              >
+                Network
+              </div>
+              {navItems.slice(3).map((n) => (
+                <button
+                  key={n.key}
+                  onClick={() => go(n.key)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 14px",
+                    background: page === n.key ? "rgba(66,165,245,.06)" : "transparent",
+                    border: "none",
+                    borderLeft: page === n.key ? `2px solid ${blue}` : "2px solid transparent",
+                    color: page === n.key ? "#E3F2FD" : "rgba(227,242,253,.35)",
+                    cursor: "pointer",
+                    fontFamily: ft.sans,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    width: "100%",
+                    textAlign: "left",
+                  }}
+                >
+                  <span style={{ fontSize: 14, width: 18, textAlign: "center" }}>{n.icon}</span>
+                  {n.label}
+                </button>
+              ))}
+            </div>
+            <div
+              style={{
+                padding: "10px 14px",
+                borderTop: "1px solid rgba(66,165,245,.06)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,.03)",
+                  border: "1px solid rgba(255,255,255,.06)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -6924,80 +6956,163 @@ export default function MarketplaceApp() {
                     strokeLinecap="round"
                   />
                 </svg>
-              </button>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontFamily: ft.sans,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "rgba(255,255,255,.5)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Operator
+                </div>
+                <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>
+                  admin@agenticproxies.com
+                </div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, cursor: "pointer" }}>
+                <path
+                  d="M12 13a1 1 0 100-2 1 1 0 000 2zm0-5a1 1 0 100-2 1 1 0 000 2zm0 10a1 1 0 100-2 1 1 0 000 2z"
+                  fill="rgba(255,255,255,.2)"
+                />
+              </svg>
             </div>
           </div>
         )}
-        <div style={{ flex: 1, overflow: "auto", padding: mob ? 16 : tab ? 20 : 28, paddingBottom: mob ? 80 : 28 }}>
-          {pages[page]}
-        </div>
-      </div>
 
-      {/* ─── MOBILE BOTTOM TAB BAR ─── */}
-      {mob && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 64,
-            background: "rgba(7,11,20,.95)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            borderTop: "1px solid rgba(66,165,245,.08)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            zIndex: 50,
-            paddingBottom: 4,
-          }}
-        >
-          {navItems.map((n) => {
-            const active = page === n.key;
-            return (
-              <button
-                key={n.key}
-                onClick={() => go(n.key)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 3,
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "6px 12px",
-                  minWidth: 52,
-                }}
-              >
-                <span
+        {/* ─── MAIN CONTENT ─── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+          {!mob && (
+            <div
+              style={{
+                height: 52,
+                borderBottom: "1px solid rgba(66,165,245,.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0 24px",
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>
+                {navItems.find((n) => n.key === page)?.label || page}
+              </span>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.18)" }}>
+                  agenticproxies.com
+                </div>
+                <div
                   style={{
-                    fontSize: 18,
-                    color: active ? blue : "rgba(227,242,253,.25)",
-                    transition: "color .2s",
-                    lineHeight: 1,
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: blue,
+                    boxShadow: `0 0 8px rgba(66,165,245,.4)`,
+                  }}
+                />
+                <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
+                <button
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 7,
+                    background: "rgba(255,255,255,.03)",
+                    border: "1px solid rgba(255,255,255,.06)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  {n.icon}
-                </span>
-                <span
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    color: active ? blue : "rgba(227,242,253,.2)",
-                    letterSpacing: ".02em",
-                  }}
-                >
-                  {n.label.length > 7 ? n.label.slice(0, 6) + "…" : n.label}
-                </span>
-                {active && <div style={{ width: 4, height: 4, borderRadius: 2, background: blue, marginTop: 1 }} />}
-              </button>
-            );
-          })}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
+                    <path
+                      d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
+                      stroke="rgba(255,255,255,.35)"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+          <div style={{ flex: 1, overflow: "auto", padding: mob ? 16 : tab ? 20 : 28, paddingBottom: mob ? 80 : 28 }}>
+            {pages[page]}
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* ─── MOBILE BOTTOM TAB BAR ─── */}
+        {mob && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 64,
+              background: "rgba(7,11,20,.95)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              borderTop: "1px solid rgba(66,165,245,.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-around",
+              zIndex: 50,
+              paddingBottom: 4,
+            }}
+          >
+            {navItems.map((n) => {
+              const active = page === n.key;
+              return (
+                <button
+                  key={n.key}
+                  onClick={() => go(n.key)}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 3,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "6px 12px",
+                    minWidth: 52,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 18,
+                      color: active ? blue : "rgba(227,242,253,.25)",
+                      transition: "color .2s",
+                      lineHeight: 1,
+                    }}
+                  >
+                    {n.icon}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: active ? blue : "rgba(227,242,253,.2)",
+                      letterSpacing: ".02em",
+                    }}
+                  >
+                    {n.label.length > 7 ? n.label.slice(0, 6) + "…" : n.label}
+                  </span>
+                  {active && <div style={{ width: 4, height: 4, borderRadius: 2, background: blue, marginTop: 1 }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </DataContext.Provider>
   );
 }

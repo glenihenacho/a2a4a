@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
-import { useMedia } from "../shared/hooks";
+import { useMedia, useApiData } from "../shared/hooks";
+import { fetchAgents } from "../shared/api";
 
-// ─── AGENT DATA (mirrors supply side) ───
-const AGENTS = [
+// ─── AGENT DATA (mirrors supply side — fallback) ───
+const AGENTS_FALLBACK = [
   {
     id: "agt-001",
     name: "RankForge",
@@ -957,7 +958,12 @@ const SCRIPT = [
         text: "I've identified 3 agents that are strong fits for this job. Each has a different specialization — here's how they compare:",
         delay: 3000,
       },
-      { role: "assistant", ui: "agentMatch", data: { agents: [AGENTS[0], AGENTS[4], AGENTS[1]] }, delay: 3800 },
+      {
+        role: "assistant",
+        ui: "agentMatch",
+        data: { agents: [AGENTS_FALLBACK[0], AGENTS_FALLBACK[4], AGENTS_FALLBACK[1]] },
+        delay: 3800,
+      },
       {
         role: "assistant",
         text: "My recommendation: **TechSEO Pro** handles both SEO and AIO in a single run — best value for a combined job like yours. But RankForge is cheaper if you only need the SEO side. Want me to break down the costs?",
@@ -1172,9 +1178,36 @@ const SCRIPT = [
   },
 ];
 
+// Maps full API agent to the simplified format used in Demand's scripted conversation
+function toSimpleAgent(a) {
+  return {
+    id: a.id,
+    name: a.name,
+    avatar: a.avatar,
+    verticals: a.verticals,
+    reputation: a.stats?.reputation ?? a.reputation ?? 0,
+    successRate: a.stats?.successRate ?? a.successRate ?? 0,
+    avgCost: a.stats?.avgCost ?? a.avgCost ?? "$0",
+    avgRuntime: a.stats?.avgRuntime ?? a.avgRuntime ?? "0m",
+    sla: a.sla?.uptime ?? a.sla ?? "99%",
+    description: a.description,
+    capabilities: Array.isArray(a.capabilities) ? a.capabilities.map((c) => (typeof c === "string" ? c : c.verb)) : [],
+    evalClaims: typeof a.evalClaims === "number" ? a.evalClaims : (a.evalClaims?.length ?? 0),
+    evalPass: typeof a.evalPass === "number" ? a.evalPass : (a.evalClaims?.filter((e) => e.pass).length ?? 0),
+  };
+}
+
 // ─── MAIN COMPONENT ───
 export default function DemandChat() {
   const { mob } = useMedia();
+
+  // Fetch agents from API — overrides fallback agent data in scripted conversation
+  const { data: rawAgents } = useApiData(fetchAgents, null);
+  const agents = useMemo(() => {
+    if (!rawAgents) return AGENTS_FALLBACK;
+    const byId = Object.fromEntries(rawAgents.map((a) => [a.id, toSimpleAgent(a)]));
+    return AGENTS_FALLBACK.map((f) => byId[f.id] || f);
+  }, [rawAgents]);
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -1319,10 +1352,14 @@ export default function DemandChat() {
           return wrap(<IntentCard intent={msg.data.intent} />);
         case "jobSpec":
           return wrap(<JobSpecPreview spec={msg.data.spec} />);
-        case "agentMatch":
-          return wrap(
-            <AgentMatchCard agents={msg.data.agents} onSelect={setSelectedAgent} selectedId={selectedAgent} />,
-          );
+        case "agentMatch": {
+          // Overlay API-fetched agent data onto the scripted fallback data
+          const matchedAgents = msg.data.agents.map((a) => {
+            const fresh = agents.find((ag) => ag.id === a.id);
+            return fresh || a;
+          });
+          return wrap(<AgentMatchCard agents={matchedAgents} onSelect={setSelectedAgent} selectedId={selectedAgent} />);
+        }
         case "costBreakdown":
           return wrap(<CostBreakdown items={msg.data.items} total={msg.data.total} />);
         case "escrow":

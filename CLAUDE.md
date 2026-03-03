@@ -18,20 +18,30 @@ AgenticProxies is a **dual-vertical AI agent marketplace** connecting SMBs (smal
 ```
 a2a4a/
 ├── CLAUDE.md              # This file — project context and conventions
-├── package.json           # Vite + React 18 + React Router DOM
-├── vite.config.js         # Vite build config with React plugin
+├── package.json           # Vite + React 18 + Hono backend
+├── vite.config.js         # Vite build config with React plugin + API proxy
+├── drizzle.config.js      # Drizzle ORM config for migrations
 ├── index.html             # Root HTML — Google Fonts, global resets
+├── .env.example           # Environment variable template
 ├── .gitignore             # node_modules, dist, .env
 ├── mvp.jsx                # Original standalone (preserved, canonical source)
 ├── demand.jsx             # Original standalone (preserved)
 ├── waitlist.jsx           # Original standalone (preserved)
 ├── vision.jsx             # Original standalone (preserved)
+├── server/                # Hono backend API
+│   ├── index.js           # Hono app with all API routes
+│   └── db/
+│       ├── index.js       # Drizzle client + connection
+│       ├── schema.js      # Drizzle table definitions (agents, intents, transactions, etc.)
+│       ├── seed.js        # Seed script — populates DB from mock data
+│       └── migrations/    # Generated Drizzle migrations
 └── src/
     ├── main.jsx           # React DOM entry point + BrowserRouter
     ├── App.jsx            # Top-level router with lazy-loaded routes
     ├── shared/
     │   ├── tokens.js      # Design tokens — ft, colors, bg (single source of truth)
-    │   ├── hooks.js       # useMedia() responsive hook
+    │   ├── hooks.js       # useMedia() responsive hook + useApiData() data fetching hook
+    │   ├── api.js         # API client — centralized fetch layer for all backend calls
     │   └── primitives.jsx # Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart
     └── pages/
         ├── Dashboard.jsx  # Core marketplace (was mvp.jsx) — 5-tab internal navigation
@@ -44,9 +54,22 @@ a2a4a/
 
 ```bash
 npm install          # Install dependencies
-npm run dev          # Start dev server (Vite HMR)
+npm run dev          # Start Vite dev server (HMR, frontend only)
+npm run dev:server   # Start Hono API server on port 3001
+npm run dev:full     # Start both API server + Vite concurrently
 npm run build        # Production build → dist/
 npm run preview      # Preview production build locally
+```
+
+### Database
+
+```bash
+# Requires a running Postgres instance (see .env.example for connection string)
+npm run db:push      # Push schema directly to database (dev)
+npm run db:generate  # Generate migration files from schema changes
+npm run db:migrate   # Run pending migrations (production)
+npm run db:seed      # Seed database with mock data
+npm run db:studio    # Open Drizzle Studio (visual DB browser)
 ```
 
 ### Routes
@@ -63,9 +86,71 @@ npm run preview      # Preview production build locally
 
 **`src/shared/tokens.js`** — All design tokens extracted from the original files. Font object (`ft`), color constants (`blue`, `blueDeep`, `bg`, `green`, `orange`, `purple`, `pink`, `red`, `lightBlue`, `textPrimary`). Import these instead of redeclaring.
 
-**`src/shared/hooks.js`** — `useMedia()` hook returning `{ w, mob, tab, desk }`. Single implementation replacing the 3 separate definitions that existed across the original files.
+**`src/shared/hooks.js`** — `useMedia()` hook returning `{ w, mob, tab, desk }`. `useApiData(fetchFn, fallback)` hook for fetching data from the API with graceful fallback to inline mock data.
+
+**`src/shared/api.js`** — Centralized API client with named exports for every backend endpoint: `fetchAgents`, `fetchIntents`, `fetchTransactions`, `fetchSignals`, `fetchMetrics`, `fetchIntentMarket`, `fetchIntentCategories`, `fetchSlaTemplates`, `fetchWrapperSpec`, `fetchScanPhases`, `fetchPipelineStages`, `fetchStatusCfg`.
 
 **`src/shared/primitives.jsx`** — Reusable UI components extracted from `mvp.jsx`: `Badge`, `VBadge`, `ScoreBar`, `Card`, `ScrollX`, `Sparkline`, `BarChart`, `DonutChart`.
+
+---
+
+## Backend (Hono + Drizzle + Postgres)
+
+### `server/index.js` — Hono API Server
+
+The API server runs on port 3001 (configurable via `PORT` env var). Vite proxies `/api/*` requests to it during development.
+
+**API routes:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/agents` | All agents (reshaped to match frontend format) |
+| `GET` | `/api/agents/:id` | Single agent by ID |
+| `POST` | `/api/agents` | Create new agent |
+| `GET` | `/api/intents` | All intents (SMB job requests) |
+| `GET` | `/api/intents/:id` | Single intent by ID |
+| `POST` | `/api/intents` | Create new intent |
+| `GET` | `/api/transactions` | Transaction history |
+| `GET` | `/api/signals` | Live auction signal feed |
+| `GET` | `/api/escrow` | Escrow view (derived from intents) |
+| `GET` | `/api/metrics` | Revenue months, perf metrics, vertical split, trending |
+| `GET` | `/api/intent-market` | Intent market analysis data |
+| `GET` | `/api/intent-categories` | Industry category aggregates |
+| `GET` | `/api/sla-templates` | SLA templates grouped by vertical |
+| `GET` | `/api/config/wrapper-spec` | A2A Protocol wrapper specification |
+| `GET` | `/api/config/scan-phases` | 10-phase agent onboarding pipeline |
+| `GET` | `/api/config/pipeline-stages` | 7-step onboarding funnel |
+| `GET` | `/api/config/status-cfg` | Intent status display config |
+| `GET` | `/api/health` | Health check |
+
+Static/config data (PERF_METRICS, VERTICAL_SPLIT, TRENDING_UP, WRAPPER_SPEC, SCAN_PHASES, PIPELINE_STAGES, STATUS_CFG) is served from in-memory constants in the server since it's not entity data that needs a database.
+
+### `server/db/schema.js` — Drizzle Schema
+
+**Tables:** `agents`, `intents`, `transactions`, `signals`, `intent_market`, `sla_templates`, `revenue_months`, `intent_categories`
+
+**Enums:** `vertical` (SEO/AIO), `agent_status`, `intent_status`, `txn_type`, `txn_status`, `currency`, `signal_status`, `aio_pos`, `escrow_state`
+
+Complex nested data (capabilities, SLA params, policies, eval claims, schemas) is stored as `jsonb` columns.
+
+### `server/db/seed.js` — Database Seed Script
+
+Populates all tables from the same mock data that was previously hardcoded in the frontend. Run with `npm run db:seed`.
+
+### Data Flow
+
+```
+Frontend (React)
+  └── src/shared/api.js ── fetch("/api/...") ──→ Vite proxy ──→ Hono API (port 3001)
+                                                                      │
+                                                                      ↓
+                                                              Drizzle ORM queries
+                                                                      │
+                                                                      ↓
+                                                              PostgreSQL database
+```
+
+The frontend retains all mock data inline as fallbacks — if the API server is unavailable, the app renders with hardcoded data (same behavior as before the backend was added).
 
 ---
 
@@ -174,11 +259,13 @@ Scrollable presentation with fade-in animations, section-based navigation.
 ## Architecture & Conventions
 
 ### Technology Stack
-- **Framework:** React 18+ (hooks: `useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`)
-- **Build:** Vite 6 with `@vitejs/plugin-react`
+- **Frontend:** React 18+ (hooks: `useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`, `createContext`)
+- **Backend:** Hono (lightweight HTTP framework) on Node.js with `@hono/node-server`
+- **Database:** PostgreSQL with Drizzle ORM (`drizzle-orm` + `drizzle-kit` for migrations)
+- **Build:** Vite 6 with `@vitejs/plugin-react`, API proxy to Hono backend
 - **Routing:** React Router DOM 6 with lazy-loaded page components
 - **Styling:** Inline CSS objects — no external stylesheets or CSS-in-JS libraries
-- **State management:** Local component state only — no Redux, Context, or external stores
+- **State management:** Local component state + React Context (DataContext in Dashboard.jsx)
 - **Animations:** CSS `@keyframes` injected via `<style>` tags within components
 
 ### Design Tokens
@@ -312,8 +399,13 @@ SEO and AIO are **separate job types** with distinct SLA templates, but a **sing
 ## Cross-File Relationships
 
 ```
+server/index.js ──→ Hono API serving data from PostgreSQL via Drizzle
+server/db/schema.js ──→ Database table definitions
+server/db/seed.js ──→ Populates DB from mock data
+
 src/shared/tokens.js ──→ All pages (single source of truth for design tokens)
-src/shared/hooks.js  ──→ All pages (shared useMedia hook)
+src/shared/hooks.js  ──→ All pages (useMedia + useApiData hooks)
+src/shared/api.js    ──→ Dashboard.jsx, Demand.jsx (API client layer)
 src/shared/primitives.jsx ──→ Dashboard.jsx (extracted UI components)
 
 src/pages/Demand.jsx  ←→  src/pages/Waitlist.jsx
@@ -326,6 +418,7 @@ src/pages/Demand.jsx  ←→  src/pages/Waitlist.jsx
                  (Future Roadmap)
 
 src/App.jsx ──→ Routes all pages via React Router
+vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 ```
 
 - `Demand.jsx` (Demand Agent) and `Waitlist.jsx` (Supply Agent onboarding) are complementary two-sided marketplace UIs
@@ -381,7 +474,7 @@ src/App.jsx ──→ Routes all pages via React Router
 
 **Target stack:** Hono (backend) + Drizzle (ORM) + Postgres + Lucia (auth) + Stripe (payments) + Docker + Fly.io
 
-**Current state:** Pure frontend SPA with hardcoded mock data. Zero tests, CI/CD, backend, or deployment config.
+**Current state:** React SPA with Hono backend API + Drizzle ORM + PostgreSQL schema. Frontend fetches from API with inline fallbacks. Dev tooling (ESLint, Prettier, Husky) and frontend tests (Vitest, Playwright) are configured. No auth, payments, Docker runtime, or deployment config yet.
 
 ### Phase 0: Dev Tooling (1–2 days)
 - ESLint + Prettier + `.editorconfig`
@@ -398,31 +491,41 @@ src/App.jsx ──→ Routes all pages via React Router
 - Playwright E2E in CI with headless browser
 - Build artifact caching
 
-### Phase 3: Backend API — Hono (1–2 weeks)
-- `/server` directory with Hono app
+### Phase 3: Backend API — Hono ✅
+- `/server` directory with Hono app (`server/index.js`)
 - API routes mirroring the current mock data:
   - `GET/POST /api/agents` — registry CRUD
   - `GET/POST /api/intents` — market intents
-  - `GET/POST /api/jobs` — job dispatch + status
   - `GET /api/signals` — live auction feed
-  - `GET/POST /api/escrow` — escrow state machine
+  - `GET /api/escrow` — escrow view (derived from intents)
   - `GET /api/transactions` — transaction history
-  - `GET /api/metrics` — revenue + performance KPIs
-- Vite dev proxy to Hono backend
-- Frontend migrated from hardcoded data to `fetch()` calls
+  - `GET /api/metrics` — revenue, perf metrics, vertical split, trending
+  - `GET /api/intent-market` — intent market analysis
+  - `GET /api/intent-categories` — industry categories
+  - `GET /api/sla-templates` — SLA templates by vertical
+  - `GET /api/config/*` — wrapper spec, scan phases, pipeline stages, status config
+  - `GET /api/health` — health check
+- Vite dev proxy configured (`/api/*` → `localhost:3001`)
+- Frontend migrated from hardcoded data to `fetch()` calls with inline fallbacks
+- `src/shared/api.js` — centralized fetch layer
+- `src/shared/hooks.js` — `useApiData()` hook with graceful fallback
+- Dashboard.jsx uses `DataContext` to provide API data to sub-components
+- Demand.jsx overlays API-fetched agents onto scripted conversation
 
-### Phase 4: Database — Postgres + Drizzle (1 week)
-- Schema:
-  - `users` — SMBs + agent builders, account type enum
-  - `agents` — registry, capabilities, SLA params, reputation, status
-  - `intents` — SMB demand signals, vertical, volume, competition
-  - `jobs` — JobSpec lifecycle (draft → escrowed → executing → completed/failed)
-  - `escrow` — state machine (pending → locked → released/refunded), tiered threshold logic
-  - `transactions` — clearing fees, milestones, refunds, CPE bid charges
-  - `signals` — live auction data, rank, spend, impressions
-- Drizzle migrations via `drizzle-kit`
-- Seed script populated from current mock data constants
-- API routes switch from in-memory to Drizzle queries
+### Phase 4: Database — Postgres + Drizzle ✅
+- Schema (`server/db/schema.js`):
+  - `agents` — registry, capabilities (jsonb), SLA params (jsonb), reputation, status
+  - `intents` — SMB demand signals, vertical, status, budget, agent assignment
+  - `transactions` — clearing fees, milestones, refunds
+  - `signals` — live auction data, rank, spend, impressions, 7d sparklines
+  - `intent_market` — market analysis with volume trends, AIO rates, CTR deltas
+  - `sla_templates` — SLA types by vertical
+  - `revenue_months` — monthly platform revenue
+  - `intent_categories` — industry category aggregates
+- Drizzle config (`drizzle.config.js`) with migration support via `drizzle-kit`
+- Seed script (`server/db/seed.js`) populated from current mock data constants
+- API routes use Drizzle queries against PostgreSQL
+- **Deferred to Phase 5:** `users` table, `jobs` table (JobSpec lifecycle), `escrow` state machine table
 
 ### Phase 5: Auth — Lucia (3–5 days)
 - Two account types: `smb` (demand side) and `builder` (supply side)
