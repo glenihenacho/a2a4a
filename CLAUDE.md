@@ -30,10 +30,11 @@ a2a4a/
 ├── vision.jsx             # Original standalone (preserved)
 ├── server/                # Hono backend API
 │   ├── index.js           # Hono app with all API routes
+│   ├── auth.js            # Better Auth config (email/password, roles)
 │   └── db/
 │       ├── index.js       # Drizzle client + connection
 │       ├── schema.js      # Drizzle table definitions (agents, intents, transactions, etc.)
-│       ├── seed.js        # Seed script — populates DB from mock data
+│       ├── seed.js        # Seed script — populates DB from mock data + demo users
 │       └── migrations/    # Generated Drizzle migrations
 └── src/
     ├── main.jsx           # React DOM entry point + BrowserRouter
@@ -42,8 +43,10 @@ a2a4a/
     │   ├── tokens.js      # Design tokens — ft, colors, bg (single source of truth)
     │   ├── hooks.js       # useMedia() responsive hook + useApiData() data fetching hook
     │   ├── api.js         # API client — centralized fetch layer for all backend calls
+    │   ├── auth.js        # Better Auth React client (useSession, signIn, signUp, signOut)
     │   └── primitives.jsx # Badge, VBadge, ScoreBar, Card, ScrollX, Sparkline, BarChart, DonutChart
     └── pages/
+        ├── Auth.jsx       # Login/Register page with role selection
         ├── Dashboard.jsx  # Core marketplace (was mvp.jsx) — 5-tab internal navigation
         ├── Demand.jsx     # Demand Agent interface (was demand.jsx)
         ├── Waitlist.jsx   # Agent builder onboarding (was waitlist.jsx)
@@ -77,6 +80,7 @@ npm run db:studio    # Open Drizzle Studio (visual DB browser)
 | Path | Component | Description |
 |------|-----------|-------------|
 | `/` | Redirect → `/dashboard` | Default entry |
+| `/auth` | `Auth` | Login/Register with role selection (smb/builder) |
 | `/dashboard` | `MarketplaceApp` | Core marketplace with 5 internal tabs |
 | `/demand` | `DemandChat` | Demand Agent interface (persistent memory, per-SMB) |
 | `/waitlist` | `SupplyWaitlist` | Agent builder landing page |
@@ -121,21 +125,25 @@ The API server runs on port 3001 (configurable via `PORT` env var). Vite proxies
 | `GET` | `/api/config/scan-phases` | 10-phase agent onboarding pipeline |
 | `GET` | `/api/config/pipeline-stages` | 7-step onboarding funnel |
 | `GET` | `/api/config/status-cfg` | Intent status display config |
+| `*` | `/api/auth/*` | Better Auth routes (sign-up, sign-in, sign-out, session) |
+| `GET` | `/api/me` | Current authenticated user (or null) |
 | `GET` | `/api/health` | Health check |
+
+**Auth-protected routes:** `POST /api/agents`, `POST /api/intents` require an authenticated session.
 
 Static/config data (PERF_METRICS, VERTICAL_SPLIT, TRENDING_UP, WRAPPER_SPEC, SCAN_PHASES, PIPELINE_STAGES, STATUS_CFG) is served from in-memory constants in the server since it's not entity data that needs a database.
 
 ### `server/db/schema.js` — Drizzle Schema
 
-**Tables:** `agents`, `intents`, `transactions`, `signals`, `intent_market`, `sla_templates`, `revenue_months`, `intent_categories`
+**Tables:** `user`, `session`, `account`, `verification` (auth), `agents`, `intents`, `transactions`, `signals`, `intent_market`, `sla_templates`, `revenue_months`, `intent_categories`
 
-**Enums:** `vertical` (SEO/AIO), `agent_status`, `intent_status`, `txn_type`, `txn_status`, `currency`, `signal_status`, `aio_pos`, `escrow_state`
+**Enums:** `user_role` (smb/builder), `vertical` (SEO/AIO), `agent_status`, `intent_status`, `txn_type`, `txn_status`, `currency`, `signal_status`, `aio_pos`, `escrow_state`
 
 Complex nested data (capabilities, SLA params, policies, eval claims, schemas) is stored as `jsonb` columns.
 
 ### `server/db/seed.js` — Database Seed Script
 
-Populates all tables from the same mock data that was previously hardcoded in the frontend. Run with `npm run db:seed`.
+Populates all tables from the same mock data that was previously hardcoded in the frontend, plus demo users (`smb@demo.com` / `builder@demo.com`, password: `password123`). Run with `npm run db:seed`.
 
 ### Data Flow
 
@@ -261,6 +269,7 @@ Scrollable presentation with fade-in animations, section-based navigation.
 ### Technology Stack
 - **Frontend:** React 18+ (hooks: `useState`, `useEffect`, `useRef`, `useCallback`, `useMemo`, `createContext`)
 - **Backend:** Hono (lightweight HTTP framework) on Node.js with `@hono/node-server`
+- **Auth:** Better Auth with Drizzle adapter, email/password, session cookies
 - **Database:** PostgreSQL with Drizzle ORM (`drizzle-orm` + `drizzle-kit` for migrations)
 - **Build:** Vite 6 with `@vitejs/plugin-react`, API proxy to Hono backend
 - **Routing:** React Router DOM 6 with lazy-loaded page components
@@ -527,13 +536,17 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 - API routes use Drizzle queries against PostgreSQL
 - **Deferred to Phase 5:** `users` table, `jobs` table (JobSpec lifecycle), `escrow` state machine table
 
-### Phase 5: Auth — Lucia (3–5 days)
-- Two account types: `smb` (demand side) and `builder` (supply side)
-- Lucia session-based auth with Postgres session store
-- Login/register pages in frontend
-- Protected API routes via Hono middleware
-- Demand Agent sessions tied to authenticated SMB user
-- Agent builder dashboard scoped to their own agents
+### Phase 5: Auth — Better Auth ✅
+- Better Auth with Drizzle adapter + Postgres (`server/auth.js`)
+- Two account types via `user_role` enum: `smb` (demand side) and `builder` (supply side)
+- Session-based auth with Postgres session store (cookie-based)
+- Login/Register page (`src/pages/Auth.jsx`) with role selection UI
+- Auth client (`src/shared/auth.js`) — `useSession`, `signIn`, `signUp`, `signOut`
+- App.jsx: TopNav shows user name, role badge, sign-out button when authenticated
+- Protected write routes (POST /api/agents, POST /api/intents) require auth session
+- GET /api/me returns current user or null
+- Demo users seeded: `smb@demo.com` / `builder@demo.com` (password: `password123`)
+- Schema: `user`, `session`, `account`, `verification` tables with proper indexes
 
 ### Phase 6: Escrow + Payments — Stripe (1–2 weeks)
 - Stripe Connect for agent builder payouts

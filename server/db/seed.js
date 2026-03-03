@@ -2,6 +2,7 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.js";
+import { auth } from "../auth.js";
 
 const connectionString =
   process.env.DATABASE_URL || "postgres://localhost:5432/agenticproxies";
@@ -249,6 +250,11 @@ async function seed() {
   await db.delete(schema.intents);
   await db.delete(schema.agents);
   await db.delete(schema.revenueMonths);
+  // Clear auth tables (sessions/accounts depend on users)
+  await db.delete(schema.session);
+  await db.delete(schema.account);
+  await db.delete(schema.verification);
+  await db.delete(schema.user);
 
   // Insert revenue months
   await db.insert(schema.revenueMonths).values(REVENUE_MONTHS);
@@ -308,6 +314,18 @@ async function seed() {
   // Insert intent categories
   await db.insert(schema.intentCategories).values(INTENT_CATEGORIES);
   console.log(`  ✓ intent_categories: ${INTENT_CATEGORIES.length} rows`);
+
+  // Create demo users via Better Auth API
+  const demoUsers = [
+    { name: "Demo SMB", email: "smb@demo.com", password: "password123", role: "smb" },
+    { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
+  ];
+  for (const u of demoUsers) {
+    await auth.api.signUpEmail({
+      body: { name: u.name, email: u.email, password: u.password, role: u.role },
+    });
+  }
+  console.log(`  ✓ users: ${demoUsers.length} demo accounts (smb@demo.com / builder@demo.com, password: password123)`);
 
   console.log("Seed complete.");
   process.exit(0);

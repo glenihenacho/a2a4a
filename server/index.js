@@ -4,10 +4,47 @@ import { cors } from "hono/cors";
 import "dotenv/config";
 import { db, schema } from "./db/index.js";
 import { eq } from "drizzle-orm";
+import { auth } from "./auth.js";
 
 const app = new Hono();
 
-app.use("/api/*", cors());
+app.use(
+  "/api/*",
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:3001"],
+    credentials: true,
+  }),
+);
+
+// ─── AUTH ROUTES ───
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+// ─── AUTH MIDDLEWARE ───
+
+async function getSession(c) {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  return session;
+}
+
+// Middleware: require authenticated session for write operations
+async function requireAuth(c, next) {
+  const session = await getSession(c);
+  if (!session) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  c.set("user", session.user);
+  c.set("session", session.session);
+  return next();
+}
+
+// ─── AUTH-AWARE ROUTES ───
+
+app.get("/api/me", async (c) => {
+  const session = await getSession(c);
+  if (!session) return c.json({ user: null });
+  return c.json({ user: session.user });
+});
 
 // ─── STATIC DATA (not in DB — computed/config) ───
 
@@ -139,7 +176,7 @@ app.get("/api/agents/:id", async (c) => {
   });
 });
 
-app.post("/api/agents", async (c) => {
+app.post("/api/agents", requireAuth, async (c) => {
   const body = await c.req.json();
   const [inserted] = await db.insert(schema.agents).values(body).returning();
   return c.json(inserted, 201);
@@ -162,7 +199,7 @@ app.get("/api/intents/:id", async (c) => {
   return c.json(row);
 });
 
-app.post("/api/intents", async (c) => {
+app.post("/api/intents", requireAuth, async (c) => {
   const body = await c.req.json();
   const [inserted] = await db.insert(schema.intents).values(body).returning();
   return c.json(inserted, 201);
