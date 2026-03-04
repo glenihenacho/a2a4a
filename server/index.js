@@ -515,8 +515,10 @@ if (existsSync(distPath)) {
 
 const port = parseInt(process.env.PORT || "3001", 10);
 
-serve({ fetch: app.fetch, port }, () => {
-  console.log(`Hono API server running on http://localhost:${port}`);
+const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+
+serve({ fetch: app.fetch, port, hostname }, () => {
+  console.log(`Hono API server running on http://${hostname}:${port}`);
 });
 
 export default app;
