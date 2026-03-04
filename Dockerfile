@@ -2,7 +2,7 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # ─── Stage 2: Build frontend ───
 FROM node:22-slim AS build
