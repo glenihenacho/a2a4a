@@ -24,7 +24,12 @@ if (isDbAvailable()) {
         expiresIn: 60 * 60 * 24 * 7, // 7 days
         updateAge: 60 * 60 * 24, // update session every 24 hours
       },
-      trustedOrigins: ["http://localhost:5173", "http://localhost:3001"],
+      trustedOrigins: (() => {
+        const origins = ["http://localhost:5173", "http://localhost:3001"];
+        if (process.env.FLY_APP_NAME) origins.push(`https://${process.env.FLY_APP_NAME}.fly.dev`);
+        if (process.env.BETTER_AUTH_URL) origins.push(process.env.BETTER_AUTH_URL);
+        return origins;
+      })(),
     });
   } catch (err) {
     console.warn("Failed to initialize auth:", err.message);
