@@ -3,7 +3,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import "dotenv/config";
-import { db, schema } from "./db/index.js";
+import { db, schema, isDbAvailable } from "./db/index.js";
 import { eq } from "drizzle-orm";
 import { auth } from "./auth.js";
 import {
@@ -38,13 +38,26 @@ app.use(
   }),
 );
 
+// ─── DB GUARD MIDDLEWARE ───
+
+function requireDb(c, next) {
+  if (!isDbAvailable()) {
+    return c.json({ error: "Database unavailable" }, 503);
+  }
+  return next();
+}
+
 // ─── AUTH ROUTES ───
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  if (!auth) return c.json({ error: "Auth unavailable — no database" }, 503);
+  return auth.handler(c.req.raw);
+});
 
 // ─── AUTH MIDDLEWARE ───
 
 async function getSession(c) {
+  if (!auth) return null;
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   return session;
 }
@@ -143,7 +156,7 @@ const STATUS_CFG = {
 
 // ─── AGENTS ───
 
-app.get("/api/agents", async (c) => {
+app.get("/api/agents", requireDb, async (c) => {
   const rows = await db.select().from(schema.agents);
   // Reshape to match frontend MOCK_AGENTS format
   const agents = rows.map((r) => ({
@@ -177,7 +190,7 @@ app.get("/api/agents", async (c) => {
   return c.json(agents);
 });
 
-app.get("/api/agents/:id", async (c) => {
+app.get("/api/agents/:id", requireDb, async (c) => {
   const { id } = c.req.param();
   const [row] = await db
     .select()
@@ -198,7 +211,7 @@ app.get("/api/agents/:id", async (c) => {
   });
 });
 
-app.post("/api/agents", requireAuth, async (c) => {
+app.post("/api/agents", requireAuth, requireDb, async (c) => {
   const body = await c.req.json();
   const [inserted] = await db.insert(schema.agents).values(body).returning();
   return c.json(inserted, 201);
@@ -206,12 +219,12 @@ app.post("/api/agents", requireAuth, async (c) => {
 
 // ─── INTENTS ───
 
-app.get("/api/intents", async (c) => {
+app.get("/api/intents", requireDb, async (c) => {
   const rows = await db.select().from(schema.intents);
   return c.json(rows);
 });
 
-app.get("/api/intents/:id", async (c) => {
+app.get("/api/intents/:id", requireDb, async (c) => {
   const { id } = c.req.param();
   const [row] = await db
     .select()
@@ -221,7 +234,7 @@ app.get("/api/intents/:id", async (c) => {
   return c.json(row);
 });
 
-app.post("/api/intents", requireAuth, async (c) => {
+app.post("/api/intents", requireAuth, requireDb, async (c) => {
   const body = await c.req.json();
   const [inserted] = await db.insert(schema.intents).values(body).returning();
   return c.json(inserted, 201);
@@ -229,33 +242,33 @@ app.post("/api/intents", requireAuth, async (c) => {
 
 // ─── TRANSACTIONS ───
 
-app.get("/api/transactions", async (c) => {
+app.get("/api/transactions", requireDb, async (c) => {
   const rows = await db.select().from(schema.transactions);
   return c.json(rows);
 });
 
 // ─── SIGNALS (Live Auction Feed) ───
 
-app.get("/api/signals", async (c) => {
+app.get("/api/signals", requireDb, async (c) => {
   const rows = await db.select().from(schema.signals);
   return c.json(rows);
 });
 
 // ─── JOBS ───
 
-app.get("/api/jobs", async (c) => {
+app.get("/api/jobs", requireDb, async (c) => {
   const rows = await db.select().from(schema.jobs);
   return c.json(rows);
 });
 
-app.get("/api/jobs/:id", async (c) => {
+app.get("/api/jobs/:id", requireDb, async (c) => {
   const { id } = c.req.param();
   const [row] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, id));
   if (!row) return c.json({ error: "Job not found" }, 404);
   return c.json(row);
 });
 
-app.post("/api/jobs", async (c) => {
+app.post("/api/jobs", requireDb, async (c) => {
   const body = await c.req.json();
   const id = `JOB-${String(Date.now()).slice(-6)}`;
   const [inserted] = await db
@@ -267,12 +280,12 @@ app.post("/api/jobs", async (c) => {
 
 // ─── ESCROW ───
 
-app.get("/api/escrow", async (c) => {
+app.get("/api/escrow", requireDb, async (c) => {
   const rows = await db.select().from(schema.escrow);
   return c.json(rows);
 });
 
-app.get("/api/escrow/:id", async (c) => {
+app.get("/api/escrow/:id", requireDb, async (c) => {
   const { id } = c.req.param();
   const [row] = await db.select().from(schema.escrow).where(eq(schema.escrow.id, id));
   if (!row) return c.json({ error: "Escrow not found" }, 404);
@@ -280,7 +293,7 @@ app.get("/api/escrow/:id", async (c) => {
 });
 
 // Create escrow + Stripe PaymentIntent for a job
-app.post("/api/escrow", async (c) => {
+app.post("/api/escrow", requireDb, async (c) => {
   const { jobId, amountCents, currency } = await c.req.json();
   if (!jobId || !amountCents) {
     return c.json({ error: "jobId and amountCents are required" }, 400);
@@ -312,7 +325,7 @@ app.post("/api/escrow", async (c) => {
 });
 
 // Lock escrow: pending → locked (after payment confirmation)
-app.post("/api/escrow/:id/lock", async (c) => {
+app.post("/api/escrow/:id/lock", requireDb, async (c) => {
   try {
     const updated = await lockEscrow(db, schema, c.req.param("id"));
     return c.json(updated);
@@ -322,7 +335,7 @@ app.post("/api/escrow/:id/lock", async (c) => {
 });
 
 // Release escrow: locked → released (SLA verified)
-app.post("/api/escrow/:id/release", async (c) => {
+app.post("/api/escrow/:id/release", requireDb, async (c) => {
   try {
     const escrowRow = await releaseEscrow(db, schema, c.req.param("id"));
 
@@ -349,7 +362,7 @@ app.post("/api/escrow/:id/release", async (c) => {
 });
 
 // Refund escrow: locked → refunded (SLA miss, tiered)
-app.post("/api/escrow/:id/refund", async (c) => {
+app.post("/api/escrow/:id/refund", requireDb, async (c) => {
   try {
     const { slaPct, milestonesHit } = await c.req.json();
     if (slaPct === undefined || milestonesHit === undefined) {
@@ -383,7 +396,7 @@ app.post("/api/escrow/preview-refund", async (c) => {
 
 // ─── STRIPE CONNECT (agent builder onboarding) ───
 
-app.post("/api/connect/create-account", async (c) => {
+app.post("/api/connect/create-account", requireDb, async (c) => {
   const { agentId, email } = await c.req.json();
   if (!agentId || !email) {
     return c.json({ error: "agentId and email are required" }, 400);
@@ -406,7 +419,7 @@ app.post("/api/connect/onboarding-link", async (c) => {
 
 // ─── STRIPE WEBHOOKS ───
 
-app.post("/api/webhooks/stripe", async (c) => {
+app.post("/api/webhooks/stripe", requireDb, async (c) => {
   const signature = c.req.header("stripe-signature");
   const body = await c.req.text();
 
@@ -451,7 +464,7 @@ app.get("/api/stripe/status", (c) => {
 
 // ─── METRICS ───
 
-app.get("/api/metrics", async (c) => {
+app.get("/api/metrics", requireDb, async (c) => {
   const revenue = await db.select().from(schema.revenueMonths);
   return c.json({
     revenue,
@@ -463,21 +476,21 @@ app.get("/api/metrics", async (c) => {
 
 // ─── INTENT MARKET ───
 
-app.get("/api/intent-market", async (c) => {
+app.get("/api/intent-market", requireDb, async (c) => {
   const rows = await db.select().from(schema.intentMarket);
   return c.json(rows);
 });
 
 // ─── INTENT CATEGORIES ───
 
-app.get("/api/intent-categories", async (c) => {
+app.get("/api/intent-categories", requireDb, async (c) => {
   const rows = await db.select().from(schema.intentCategories);
   return c.json(rows);
 });
 
 // ─── SLA TEMPLATES ───
 
-app.get("/api/sla-templates", async (c) => {
+app.get("/api/sla-templates", requireDb, async (c) => {
   const rows = await db.select().from(schema.slaTemplates);
   // Group by vertical to match frontend SLA_TEMPLATES format
   const grouped = {};
@@ -497,7 +510,9 @@ app.get("/api/config/status-cfg", (c) => c.json(STATUS_CFG));
 
 // ─── HEALTH ───
 
-app.get("/api/health", (c) => c.json({ status: "ok", timestamp: new Date().toISOString() }));
+app.get("/api/health", (c) =>
+  c.json({ status: "ok", db: isDbAvailable(), timestamp: new Date().toISOString() }),
+);
 
 // ─── STATIC FILES (production) ───
 // Serve the Vite-built frontend from /dist when it exists.
@@ -519,6 +534,7 @@ const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
 
 serve({ fetch: app.fetch, port, hostname }, () => {
   console.log(`Hono API server running on http://${hostname}:${port}`);
+  console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
 });
 
 export default app;
