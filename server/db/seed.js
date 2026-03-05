@@ -437,12 +437,20 @@ async function seed() {
     { name: "Demo SMB", email: "smb@demo.com", password: "password123", role: "smb" },
     { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
   ];
-  for (const u of demoUsers) {
-    await auth.api.signUpEmail({
-      body: { name: u.name, email: u.email, password: u.password, role: u.role },
-    });
+  try {
+    if (auth?.api?.signUpEmail) {
+      for (const u of demoUsers) {
+        await auth.api.signUpEmail({
+          body: { name: u.name, email: u.email, password: u.password, role: u.role },
+        });
+      }
+      console.log(`  ✓ users: ${demoUsers.length} demo accounts (smb@demo.com / builder@demo.com, password: password123)`);
+    } else {
+      console.log("  ⚠ users: skipped (auth not available)");
+    }
+  } catch (err) {
+    console.log(`  ⚠ users: skipped (${err.message})`);
   }
-  console.log(`  ✓ users: ${demoUsers.length} demo accounts (smb@demo.com / builder@demo.com, password: password123)`);
 
   console.log("Seed complete.");
   process.exit(0);

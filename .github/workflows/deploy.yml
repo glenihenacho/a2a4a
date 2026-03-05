@@ -25,7 +25,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Push database schema
-        run: flyctl ssh console -C "cd /app && npx drizzle-kit push --force"
+        run: flyctl ssh console -C "cd /app && yes | npx drizzle-kit push"
         continue-on-error: true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
