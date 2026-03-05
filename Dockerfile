@@ -27,6 +27,9 @@ COPY package.json ./
 COPY server ./server
 COPY drizzle.config.js ./
 
+# Install drizzle-kit for schema migrations via SSH
+RUN npm install drizzle-kit
+
 ENV NODE_ENV=production
 ENV PORT=8080
 
