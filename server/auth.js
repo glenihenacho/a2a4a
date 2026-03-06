@@ -26,8 +26,11 @@ if (isDbAvailable()) {
       },
       trustedOrigins: (() => {
         const origins = ["http://localhost:5173", "http://localhost:3001"];
+        if (process.env.APP_URL) origins.push(process.env.APP_URL);
         if (process.env.FLY_APP_NAME) origins.push(`https://${process.env.FLY_APP_NAME}.fly.dev`);
-        if (process.env.BETTER_AUTH_URL) origins.push(process.env.BETTER_AUTH_URL);
+        if (process.env.BETTER_AUTH_URL && process.env.BETTER_AUTH_URL !== process.env.APP_URL) {
+          origins.push(process.env.BETTER_AUTH_URL);
+        }
         return origins;
       })(),
     });

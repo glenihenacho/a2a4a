@@ -28,7 +28,7 @@ jobs:
         run: |
           echo "Waiting for app to start..."
           for i in 1 2 3 4 5 6; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://agenticproxies.fly.dev/api/health || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://agenticproxies.com/api/health || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "App is healthy (HTTP 200)"
               break

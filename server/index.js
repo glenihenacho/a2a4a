@@ -25,7 +25,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = new Hono();
 
+const APP_BASE_URL = process.env.APP_URL || "http://localhost:5173";
+
 const allowedOrigins = ["http://localhost:5173", "http://localhost:3001"];
+if (process.env.APP_URL) {
+  allowedOrigins.push(process.env.APP_URL);
+}
 if (process.env.FLY_APP_NAME) {
   allowedOrigins.push(`https://${process.env.FLY_APP_NAME}.fly.dev`);
 }
@@ -411,8 +416,8 @@ app.post("/api/connect/onboarding-link", async (c) => {
   if (!accountId) return c.json({ error: "accountId is required" }, 400);
   const link = await createAccountLink(
     accountId,
-    refreshUrl || "http://localhost:5173/dashboard",
-    returnUrl || "http://localhost:5173/dashboard",
+    refreshUrl || `${APP_BASE_URL}/dashboard`,
+    returnUrl || `${APP_BASE_URL}/dashboard`,
   );
   return c.json({ url: link.url });
 });
