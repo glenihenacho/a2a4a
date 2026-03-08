@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
+import { useMedia } from "../shared/hooks";
 
 const PHASES = [
   {
@@ -245,7 +246,9 @@ function PhaseCard({ phase, index }) {
 }
 
 export default function Vision() {
+  const { mob } = useMedia();
   const [activeSection, setActiveSection] = useState("market");
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
     const h = () => {
       for (const id of ["risks", "token", "roadmap", "market"]) {
@@ -259,6 +262,16 @@ export default function Vision() {
     window.addEventListener("scroll", h);
     return () => window.removeEventListener("scroll", h);
   }, []);
+
+  // Close menu on scroll
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    window.addEventListener("scroll", close);
+    return () => window.removeEventListener("scroll", close);
+  }, [menuOpen]);
+
+  const navLinks = ["Market", "Roadmap", "Token", "Risks"];
 
   return (
     <div
@@ -321,7 +334,7 @@ export default function Vision() {
           style={{
             maxWidth: 1200,
             margin: "0 auto",
-            padding: "0 32px",
+            padding: mob ? "0 16px" : "0 32px",
             height: 64,
             display: "flex",
             alignItems: "center",
@@ -351,19 +364,90 @@ export default function Vision() {
               <span style={{ color: "rgba(255,255,255,.25)" }}>.com</span>
             </span>
           </div>
-          <div style={{ display: "flex", gap: 28 }}>
-            {["Market", "Roadmap", "Token", "Risks"].map((l) => (
+
+          {/* Desktop nav links */}
+          {!mob && (
+            <div style={{ display: "flex", gap: 28 }}>
+              {navLinks.map((l) => (
+                <a
+                  key={l}
+                  href={`#${l.toLowerCase()}`}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: activeSection === l.toLowerCase() ? blue : "rgba(227,242,253,.35)",
+                    textDecoration: "none",
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    transition: "color .3s",
+                  }}
+                >
+                  {l}
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Mobile hamburger */}
+          {mob && (
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              style={{
+                background: "rgba(255,255,255,.04)",
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 8,
+                width: 36,
+                height: 36,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 4,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              {menuOpen ? (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="rgba(227,242,253,.5)" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <>
+                  <span style={{ width: 14, height: 1.5, background: "rgba(227,242,253,.5)", borderRadius: 1 }} />
+                  <span style={{ width: 14, height: 1.5, background: "rgba(227,242,253,.5)", borderRadius: 1 }} />
+                  <span style={{ width: 14, height: 1.5, background: "rgba(227,242,253,.5)", borderRadius: 1 }} />
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Mobile dropdown menu */}
+        {mob && menuOpen && (
+          <div
+            style={{
+              background: "rgba(6,10,18,0.95)",
+              borderTop: "1px solid rgba(255,255,255,.05)",
+              padding: "8px 16px 12px",
+            }}
+          >
+            {navLinks.map((l) => (
               <a
                 key={l}
                 href={`#${l.toLowerCase()}`}
+                onClick={() => setMenuOpen(false)}
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  display: "block",
+                  fontFamily: ft.mono,
                   fontSize: 12,
                   fontWeight: 500,
-                  color: activeSection === l.toLowerCase() ? blue : "rgba(227,242,253,.35)",
+                  color: activeSection === l.toLowerCase() ? blue : "rgba(227,242,253,.4)",
                   textDecoration: "none",
                   letterSpacing: ".08em",
                   textTransform: "uppercase",
+                  padding: "12px 8px",
+                  borderBottom: "1px solid rgba(255,255,255,.03)",
                   transition: "color .3s",
                 }}
               >
@@ -371,7 +455,7 @@ export default function Vision() {
               </a>
             ))}
           </div>
-        </div>
+        )}
       </nav>
 
       {/* HERO */}
