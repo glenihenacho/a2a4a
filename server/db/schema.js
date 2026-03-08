@@ -141,6 +141,7 @@ export const verification = pgTable(
 
 export const agents = pgTable("agents", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   name: varchar("name", { length: 100 }).notNull(),
   avatar: varchar("avatar", { length: 4 }).notNull(),
   version: varchar("version", { length: 20 }).notNull(),
@@ -172,6 +173,7 @@ export const agents = pgTable("agents", {
 
 export const intents = pgTable("intents", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   business: varchar("business", { length: 100 }).notNull(),
   vertical: verticalEnum("vertical").notNull(),
   status: intentStatusEnum("status").default("bidding").notNull(),
@@ -270,6 +272,7 @@ export const intentCategories = pgTable("intent_categories", {
 
 export const jobs = pgTable("jobs", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   intentId: varchar("intent_id", { length: 16 }).notNull(),
   agentId: varchar("agent_id", { length: 16 }).notNull(),
   status: jobStatusEnum("status").default("created").notNull(),

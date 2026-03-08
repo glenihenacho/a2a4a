@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
 import { useMedia, useApiData } from "../shared/hooks";
 import { fetchAgents } from "../shared/api";
+import { useSession } from "../shared/auth";
 
 // ─── AGENT DATA (mirrors supply side — fallback) ───
 const AGENTS_FALLBACK = [
@@ -1200,6 +1201,7 @@ function toSimpleAgent(a) {
 // ─── MAIN COMPONENT ───
 export default function DemandChat() {
   const { mob } = useMedia();
+  const { data: session } = useSession();
 
   // Fetch agents from API — overrides fallback agent data in scripted conversation
   const { data: rawAgents } = useApiData(fetchAgents, null);
@@ -1462,7 +1464,34 @@ export default function DemandChat() {
                 boxShadow: "0 0 6px rgba(102,187,106,.5)",
               }}
             />
-            <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(102,187,106,.5)" }}>A2A Connected</span>
+            <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(102,187,106,.5)" }}>
+              {session?.user ? session.user.name || session.user.email : "A2A Connected"}
+            </span>
+            {session?.user && (
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  background: "rgba(255,255,255,.03)",
+                  border: "1px solid rgba(255,255,255,.06)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: 2,
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
+                  <path
+                    d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
+                    stroke="rgba(255,255,255,.35)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            )}
           </div>
         </div>
       </div>
