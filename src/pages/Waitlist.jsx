@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
 import { useMedia } from "../shared/hooks";
+import { submitWaitlist, fetchWaitlistStats } from "../shared/api";
 
 // ─── LIVE DEMAND DATA ───
 const DEMAND_FEED = [
@@ -370,10 +371,10 @@ function DemandTicker({ mob }) {
 }
 
 // ─── FOUNDING COUNTER ───
-function FoundingCounter({ mob }) {
-  const total = 50;
-  const taken = 23;
-  const remaining = total - taken;
+function FoundingCounter({ mob, stats }) {
+  const total = stats?.total ?? 50;
+  const taken = stats?.taken ?? 23;
+  const remaining = stats?.remaining ?? total - taken;
   const pct = (taken / total) * 100;
 
   return (
@@ -475,13 +476,36 @@ export default function SupplyWaitlist() {
   const [email, setEmail] = useState("");
   const [imageUri, setImageUri] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [slotNumber, setSlotNumber] = useState(null);
+  const [stats, setStats] = useState(null);
   const [activeGuarantee, setActiveGuarantee] = useState(0);
   const px = mob ? 16 : tab ? 40 : 80;
   const maxW = 1120;
 
-  const handleSubmit = () => {
-    if (email.includes("@") && email.includes(".")) {
+  useEffect(() => {
+    fetchWaitlistStats()
+      .then(setStats)
+      .catch(() => {});
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!email.includes("@") || !email.includes(".")) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await submitWaitlist({ email, imageUri: imageUri || undefined });
+      setSlotNumber(res.slotNumber);
       setSubmitted(true);
+      setStats((s) => s && { ...s, taken: s.taken + 1, remaining: s.remaining - 1 });
+    } catch (err) {
+      const msg = err.message || "Something went wrong";
+      if (msg.includes("409")) setError("This email is already on the waitlist");
+      else if (msg.includes("410")) setError("All founding slots have been claimed");
+      else setError("Could not join waitlist — try again");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -944,7 +968,7 @@ export default function SupplyWaitlist() {
             ))}
           </div>
 
-          <FoundingCounter mob={mob} />
+          <FoundingCounter mob={mob} stats={stats} />
         </div>
       </section>
 
@@ -1220,26 +1244,36 @@ export default function SupplyWaitlist() {
 
                 <button
                   onClick={handleSubmit}
+                  disabled={submitting}
                   style={{
                     width: "100%",
                     fontFamily: ft.display,
                     fontSize: 18,
                     fontWeight: 700,
                     color: "#fff",
-                    background: email.includes("@")
-                      ? `linear-gradient(135deg, ${blueDeep}, ${blue})`
-                      : "rgba(255,255,255,.04)",
+                    background:
+                      email.includes("@") && !submitting
+                        ? `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                        : "rgba(255,255,255,.04)",
                     border: "none",
                     padding: "16px 0",
                     borderRadius: 12,
-                    cursor: email.includes("@") ? "pointer" : "not-allowed",
-                    boxShadow: email.includes("@") ? "0 4px 20px rgba(21,101,192,.3)" : "none",
+                    cursor: email.includes("@") && !submitting ? "pointer" : "not-allowed",
+                    boxShadow: email.includes("@") && !submitting ? "0 4px 20px rgba(21,101,192,.3)" : "none",
                     transition: "all .3s",
-                    opacity: email.includes("@") ? 1 : 0.4,
+                    opacity: email.includes("@") && !submitting ? 1 : 0.4,
                   }}
                 >
-                  Claim Founding Slot →
+                  {submitting ? "Submitting..." : "Claim Founding Slot →"}
                 </button>
+
+                {error && (
+                  <div
+                    style={{ fontFamily: ft.mono, fontSize: 11, color: "#EF5350", textAlign: "center", marginTop: 10 }}
+                  >
+                    {error}
+                  </div>
+                )}
 
                 <div
                   style={{
@@ -1250,21 +1284,23 @@ export default function SupplyWaitlist() {
                     flexWrap: "wrap",
                   }}
                 >
-                  {["Docker image URI = priority", "0% fee for 12 months", "27 slots left"].map((t, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 9,
-                        color: "rgba(255,255,255,.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <span style={{ color: i === 2 ? "#FFA726" : "#66BB6A" }}>•</span> {t}
-                    </span>
-                  ))}
+                  {["Docker image URI = priority", "0% fee for 12 months", `${stats?.remaining ?? 27} slots left`].map(
+                    (t, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 9,
+                          color: "rgba(255,255,255,.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <span style={{ color: i === 2 ? "#FFA726" : "#66BB6A" }}>•</span> {t}
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
             ) : (
@@ -1324,7 +1360,8 @@ export default function SupplyWaitlist() {
                   </div>
                 )}
                 <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(102,187,106,.5)", marginTop: 16 }}>
-                  Founding slot reserved · Priority queue active
+                  {slotNumber ? `Founding slot #${slotNumber} reserved` : "Founding slot reserved"} · Priority queue
+                  active
                 </div>
               </div>
             )}

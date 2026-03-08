@@ -4,7 +4,8 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import "dotenv/config";
 import { db, schema, isDbAvailable } from "./db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
+import { z } from "zod";
 import { auth } from "./auth.js";
 import {
   isStripeEnabled,
@@ -43,6 +44,144 @@ app.use(
   }),
 );
 
+// ─── GLOBAL ERROR HANDLER ───
+
+app.onError((err, c) => {
+  if (err instanceof z.ZodError) {
+    return c.json({ error: "Validation failed", details: err.flatten().fieldErrors }, 400);
+  }
+  if (err instanceof SyntaxError && err.message.includes("JSON")) {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  console.error(`[ERROR] ${c.req.method} ${c.req.path}:`, err.message);
+  return c.json({ error: "Internal server error" }, 500);
+});
+
+// ─── RATE LIMITING ───
+// In-memory sliding window. Keyed by IP. Resets on server restart.
+
+const rateLimitStore = new Map();
+
+function rateLimit({ windowMs = 60_000, max = 10 } = {}) {
+  return async (c, next) => {
+    const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const key = `${ip}:${c.req.path}`;
+    const now = Date.now();
+    let record = rateLimitStore.get(key);
+    if (!record || now - record.windowStart > windowMs) {
+      record = { windowStart: now, count: 0 };
+      rateLimitStore.set(key, record);
+    }
+    record.count++;
+    if (record.count > max) {
+      return c.json({ error: "Too many requests" }, 429);
+    }
+    return next();
+  };
+}
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitStore) {
+    if (now - record.windowStart > 300_000) rateLimitStore.delete(key);
+  }
+}, 300_000);
+
+// ─── SAFE JSON PARSE MIDDLEWARE ───
+
+async function parseJson(c) {
+  try {
+    return await c.req.json();
+  } catch {
+    return null;
+  }
+}
+
+// ─── ZOD SCHEMAS ───
+
+const agentSchema = z.object({
+  id: z.string().max(16),
+  name: z.string().min(1).max(100),
+  avatar: z.string().max(4),
+  version: z.string().max(20),
+  verified: z.boolean().optional(),
+  status: z.enum(["evaluation", "live", "suspended"]).optional(),
+  verticals: z.array(z.enum(["SEO", "AIO"])),
+  description: z.string().min(1).max(2000),
+  capabilities: z.array(z.object({ verb: z.string(), domain: z.string(), desc: z.string() })),
+  inputSchema: z.object({ fields: z.array(z.string()), version: z.string().optional() }).passthrough(),
+  outputSchema: z.object({ fields: z.array(z.string()), version: z.string().optional() }).passthrough(),
+  toolRequirements: z.array(z.string()),
+  sla: z.object({}).passthrough(),
+  policy: z.object({}).passthrough(),
+  evalClaims: z.array(z.object({}).passthrough()),
+  totalRuns: z.number().int().min(0).optional(),
+  successRate: z.number().min(0).max(100).optional(),
+  avgRuntime: z.string().max(20),
+  avgCost: z.string().max(20),
+  activeContracts: z.number().int().min(0).optional(),
+  reputation: z.number().int().min(0).max(100).optional(),
+  monthlyRev: z.number().int().min(0).optional(),
+  wins: z.number().int().min(0).optional(),
+});
+
+const intentSchema = z.object({
+  id: z.string().max(16),
+  business: z.string().min(1).max(100),
+  vertical: z.enum(["SEO", "AIO"]),
+  status: z.enum(["bidding", "engaged", "milestone", "completed"]).optional(),
+  queries: z.string().min(1).max(1000),
+  url: z.string().max(255),
+  bids: z.number().int().min(0).optional(),
+  created: z.string().max(20),
+  budget: z.string().max(30),
+  agent: z.string().max(100).nullable().optional(),
+  milestone: z.string().max(500).nullable().optional(),
+});
+
+const jobSchema = z.object({
+  intentId: z.string().max(16),
+  agentId: z.string().max(16),
+  vertical: z.enum(["SEO", "AIO"]),
+  slaTemplateId: z.string().max(16).nullable().optional(),
+  budgetCents: z.number().int().min(1),
+  milestonesTotal: z.number().int().min(0).optional(),
+});
+
+const escrowCreateSchema = z.object({
+  jobId: z.string().max(16),
+  amountCents: z.number().int().min(1),
+  currency: z.enum(["USD", "USDC"]).optional(),
+});
+
+const escrowRefundSchema = z.object({
+  slaPct: z.number().min(0).max(100),
+  milestonesHit: z.number().int().min(0),
+});
+
+const previewRefundSchema = z.object({
+  amountCents: z.number().int().min(1),
+  slaPct: z.number().min(0).max(100),
+  milestonesHit: z.number().int().min(0),
+});
+
+const waitlistSchema = z.object({
+  email: z.string().email().max(255),
+  imageUri: z.string().max(500).optional(),
+});
+
+const connectCreateSchema = z.object({
+  agentId: z.string().max(16),
+  email: z.string().email(),
+});
+
+const onboardingLinkSchema = z.object({
+  accountId: z.string().min(1),
+  refreshUrl: z.string().url().optional(),
+  returnUrl: z.string().url().optional(),
+});
+
 // ─── DB GUARD MIDDLEWARE ───
 
 function requireDb(c, next) {
@@ -54,7 +193,7 @@ function requireDb(c, next) {
 
 // ─── AUTH ROUTES ───
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => {
+app.on(["POST", "GET"], "/api/auth/*", rateLimit({ windowMs: 60_000, max: 20 }), (c) => {
   if (!auth) return c.json({ error: "Auth unavailable — no database" }, 503);
   return auth.handler(c.req.raw);
 });
@@ -76,6 +215,17 @@ async function requireAuth(c, next) {
   c.set("user", session.user);
   c.set("session", session.session);
   return next();
+}
+
+// Middleware: require specific role
+function requireRole(...roles) {
+  return async (c, next) => {
+    const user = c.get("user");
+    if (!user || !roles.includes(user.role)) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    return next();
+  };
 }
 
 // ─── AUTH-AWARE ROUTES ───
@@ -216,9 +366,12 @@ app.get("/api/agents/:id", requireDb, async (c) => {
   });
 });
 
-app.post("/api/agents", requireAuth, requireDb, async (c) => {
-  const body = await c.req.json();
-  const [inserted] = await db.insert(schema.agents).values(body).returning();
+app.post("/api/agents", requireAuth, requireRole("builder"), requireDb, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const validated = agentSchema.parse(body);
+  const user = c.get("user");
+  const [inserted] = await db.insert(schema.agents).values({ ...validated, createdBy: user.id }).returning();
   return c.json(inserted, 201);
 });
 
@@ -239,9 +392,12 @@ app.get("/api/intents/:id", requireDb, async (c) => {
   return c.json(row);
 });
 
-app.post("/api/intents", requireAuth, requireDb, async (c) => {
-  const body = await c.req.json();
-  const [inserted] = await db.insert(schema.intents).values(body).returning();
+app.post("/api/intents", requireAuth, requireRole("smb"), requireDb, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const validated = intentSchema.parse(body);
+  const user = c.get("user");
+  const [inserted] = await db.insert(schema.intents).values({ ...validated, userId: user.id }).returning();
   return c.json(inserted, 201);
 });
 
@@ -273,12 +429,24 @@ app.get("/api/jobs/:id", requireDb, async (c) => {
   return c.json(row);
 });
 
-app.post("/api/jobs", requireDb, async (c) => {
-  const body = await c.req.json();
+app.post("/api/jobs", requireAuth, requireDb, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const validated = jobSchema.parse(body);
+
+  // Verify agent exists
+  const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, validated.agentId));
+  if (!agent) return c.json({ error: "Agent not found" }, 404);
+
+  // Verify intent exists
+  const [intent] = await db.select().from(schema.intents).where(eq(schema.intents.id, validated.intentId));
+  if (!intent) return c.json({ error: "Intent not found" }, 404);
+
+  const user = c.get("user");
   const id = `JOB-${String(Date.now()).slice(-6)}`;
   const [inserted] = await db
     .insert(schema.jobs)
-    .values({ id, ...body })
+    .values({ id, ...validated, userId: user.id })
     .returning();
   return c.json(inserted, 201);
 });
@@ -298,15 +466,16 @@ app.get("/api/escrow/:id", requireDb, async (c) => {
 });
 
 // Create escrow + Stripe PaymentIntent for a job
-app.post("/api/escrow", requireDb, async (c) => {
-  const { jobId, amountCents, currency } = await c.req.json();
-  if (!jobId || !amountCents) {
-    return c.json({ error: "jobId and amountCents are required" }, 400);
-  }
+app.post("/api/escrow", requireAuth, requireDb, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const { jobId, amountCents, currency } = escrowCreateSchema.parse(body);
 
-  // Verify job exists
+  // Verify job exists and belongs to user
   const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, jobId));
   if (!job) return c.json({ error: "Job not found" }, 404);
+  const user = c.get("user");
+  if (job.userId && job.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
 
   // Create Stripe PaymentIntent (simulated if no key)
   const pi = await createPaymentIntent(amountCents, currency || "USD", {
@@ -330,9 +499,18 @@ app.post("/api/escrow", requireDb, async (c) => {
 });
 
 // Lock escrow: pending → locked (after payment confirmation)
-app.post("/api/escrow/:id/lock", requireDb, async (c) => {
+app.post("/api/escrow/:id/lock", requireAuth, requireDb, async (c) => {
   try {
-    const updated = await lockEscrow(db, schema, c.req.param("id"));
+    const escrowId = c.req.param("id");
+
+    // Verify ownership: user must own the job behind this escrow
+    const [esc] = await db.select().from(schema.escrow).where(eq(schema.escrow.id, escrowId));
+    if (!esc) return c.json({ error: "Escrow not found" }, 404);
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, esc.jobId));
+    const user = c.get("user");
+    if (job?.userId && job.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+    const updated = await lockEscrow(db, schema, escrowId);
     return c.json(updated);
   } catch (err) {
     return c.json({ error: err.message }, 400);
@@ -340,12 +518,20 @@ app.post("/api/escrow/:id/lock", requireDb, async (c) => {
 });
 
 // Release escrow: locked → released (SLA verified)
-app.post("/api/escrow/:id/release", requireDb, async (c) => {
+app.post("/api/escrow/:id/release", requireAuth, requireDb, async (c) => {
   try {
-    const escrowRow = await releaseEscrow(db, schema, c.req.param("id"));
+    const escrowId = c.req.param("id");
 
-    // Look up job + agent for Stripe transfer
-    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, escrowRow.jobId));
+    // Verify ownership
+    const [esc] = await db.select().from(schema.escrow).where(eq(schema.escrow.id, escrowId));
+    if (!esc) return c.json({ error: "Escrow not found" }, 404);
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, esc.jobId));
+    const user = c.get("user");
+    if (job?.userId && job.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+    const escrowRow = await releaseEscrow(db, schema, escrowId);
+
+    // Look up agent for Stripe transfer
     if (job) {
       const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, job.agentId));
       if (agent?.stripeAccountId) {
@@ -367,13 +553,22 @@ app.post("/api/escrow/:id/release", requireDb, async (c) => {
 });
 
 // Refund escrow: locked → refunded (SLA miss, tiered)
-app.post("/api/escrow/:id/refund", requireDb, async (c) => {
+app.post("/api/escrow/:id/refund", requireAuth, requireDb, async (c) => {
   try {
-    const { slaPct, milestonesHit } = await c.req.json();
-    if (slaPct === undefined || milestonesHit === undefined) {
-      return c.json({ error: "slaPct and milestonesHit are required" }, 400);
-    }
-    const escrowRow = await refundEscrow(db, schema, c.req.param("id"), slaPct, milestonesHit);
+    const escrowId = c.req.param("id");
+
+    // Verify ownership
+    const [esc] = await db.select().from(schema.escrow).where(eq(schema.escrow.id, escrowId));
+    if (!esc) return c.json({ error: "Escrow not found" }, 404);
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, esc.jobId));
+    const user = c.get("user");
+    if (job?.userId && job.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+    const body = await parseJson(c);
+    if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+    const { slaPct, milestonesHit } = escrowRefundSchema.parse(body);
+
+    const escrowRow = await refundEscrow(db, schema, escrowId, slaPct, milestonesHit);
 
     // Process Stripe refund if payment intent exists and refund amount > 0
     if (escrowRow.stripePaymentIntentId && escrowRow.refundAmountCents > 0) {
@@ -392,28 +587,34 @@ app.post("/api/escrow/:id/refund", requireDb, async (c) => {
 
 // Preview refund calculation without executing
 app.post("/api/escrow/preview-refund", async (c) => {
-  const { amountCents, slaPct, milestonesHit } = await c.req.json();
-  if (amountCents === undefined || slaPct === undefined || milestonesHit === undefined) {
-    return c.json({ error: "amountCents, slaPct, and milestonesHit are required" }, 400);
-  }
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const { amountCents, slaPct, milestonesHit } = previewRefundSchema.parse(body);
   return c.json(calculateRefund(amountCents, slaPct, milestonesHit));
 });
 
 // ─── STRIPE CONNECT (agent builder onboarding) ───
 
-app.post("/api/connect/create-account", requireDb, async (c) => {
-  const { agentId, email } = await c.req.json();
-  if (!agentId || !email) {
-    return c.json({ error: "agentId and email are required" }, 400);
-  }
+app.post("/api/connect/create-account", requireAuth, requireRole("builder"), requireDb, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const { agentId, email } = connectCreateSchema.parse(body);
+
+  // Verify agent exists and belongs to this builder
+  const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, agentId));
+  if (!agent) return c.json({ error: "Agent not found" }, 404);
+  const user = c.get("user");
+  if (agent.createdBy && agent.createdBy !== user.id) return c.json({ error: "Forbidden" }, 403);
+
   const account = await createConnectAccount(email, { agentId });
   await db.update(schema.agents).set({ stripeAccountId: account.id }).where(eq(schema.agents.id, agentId));
   return c.json({ accountId: account.id });
 });
 
-app.post("/api/connect/onboarding-link", async (c) => {
-  const { accountId, refreshUrl, returnUrl } = await c.req.json();
-  if (!accountId) return c.json({ error: "accountId is required" }, 400);
+app.post("/api/connect/onboarding-link", requireAuth, async (c) => {
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const { accountId, refreshUrl, returnUrl } = onboardingLinkSchema.parse(body);
   const link = await createAccountLink(
     accountId,
     refreshUrl || `${APP_BASE_URL}/dashboard`,
@@ -512,6 +713,52 @@ app.get("/api/config/wrapper-spec", (c) => c.json(WRAPPER_SPEC));
 app.get("/api/config/scan-phases", (c) => c.json(SCAN_PHASES));
 app.get("/api/config/pipeline-stages", (c) => c.json(PIPELINE_STAGES));
 app.get("/api/config/status-cfg", (c) => c.json(STATUS_CFG));
+
+// ─── WAITLIST ───
+
+const FOUNDING_TOTAL = 50;
+
+app.get("/api/waitlist/stats", async (c) => {
+  if (!isDbAvailable()) return c.json({ total: FOUNDING_TOTAL, taken: 23, remaining: 27 });
+  const [{ value: taken }] = await db.select({ value: count() }).from(schema.waitlist);
+  return c.json({ total: FOUNDING_TOTAL, taken, remaining: FOUNDING_TOTAL - taken });
+});
+
+app.post("/api/waitlist", rateLimit({ windowMs: 60_000, max: 5 }), async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const { email, imageUri } = waitlistSchema.parse(body);
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Check for duplicate
+  const existing = await db
+    .select()
+    .from(schema.waitlist)
+    .where(eq(schema.waitlist.email, normalizedEmail));
+  if (existing.length > 0) {
+    return c.json({ error: "This email is already on the waitlist" }, 409);
+  }
+
+  // Check capacity
+  const [{ value: taken }] = await db.select({ value: count() }).from(schema.waitlist);
+  if (taken >= FOUNDING_TOTAL) {
+    return c.json({ error: "All founding slots have been claimed" }, 410);
+  }
+
+  const id = `wl-${String(taken + 1).padStart(3, "0")}`;
+  const [entry] = await db
+    .insert(schema.waitlist)
+    .values({
+      id,
+      email: normalizedEmail,
+      imageUri: imageUri || null,
+      slotNumber: taken + 1,
+    })
+    .returning();
+  return c.json({ success: true, slotNumber: entry.slotNumber, remaining: FOUNDING_TOTAL - entry.slotNumber }, 201);
+});
 
 // ─── HEALTH ───
 

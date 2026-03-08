@@ -60,6 +60,7 @@ export const escrowStateEnum = pgEnum("escrow_state", [
   "refunded",
 ]);
 export const userRoleEnum = pgEnum("user_role", ["smb", "builder"]);
+export const waitlistStatusEnum = pgEnum("waitlist_status", ["pending", "approved", "rejected"]);
 
 // ─── AUTH TABLES (Better Auth) ───
 
@@ -140,6 +141,7 @@ export const verification = pgTable(
 
 export const agents = pgTable("agents", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   name: varchar("name", { length: 100 }).notNull(),
   avatar: varchar("avatar", { length: 4 }).notNull(),
   version: varchar("version", { length: 20 }).notNull(),
@@ -171,6 +173,7 @@ export const agents = pgTable("agents", {
 
 export const intents = pgTable("intents", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   business: varchar("business", { length: 100 }).notNull(),
   vertical: verticalEnum("vertical").notNull(),
   status: intentStatusEnum("status").default("bidding").notNull(),
@@ -269,6 +272,7 @@ export const intentCategories = pgTable("intent_categories", {
 
 export const jobs = pgTable("jobs", {
   id: varchar("id", { length: 16 }).primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   intentId: varchar("intent_id", { length: 16 }).notNull(),
   agentId: varchar("agent_id", { length: 16 }).notNull(),
   status: jobStatusEnum("status").default("created").notNull(),
@@ -286,6 +290,23 @@ export const jobs = pgTable("jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ─── ESCROW ───
+
+// ─── WAITLIST ───
+
+export const waitlist = pgTable(
+  "waitlist",
+  {
+    id: varchar("id", { length: 16 }).primaryKey(),
+    email: varchar("email", { length: 255 }).notNull().unique(),
+    imageUri: varchar("image_uri", { length: 500 }),
+    status: waitlistStatusEnum("status").default("pending").notNull(),
+    slotNumber: integer("slot_number"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("waitlist_email_idx").on(table.email)],
+);
 
 // ─── ESCROW ───
 
