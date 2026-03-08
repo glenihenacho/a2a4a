@@ -33,7 +33,7 @@ export default function App() {
     <div style={{ minHeight: "100vh", background: bg, color: "#E3F2FD", fontFamily: ft.sans }}>
       <Suspense fallback={<Loading />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/auth" replace />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"
