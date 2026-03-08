@@ -60,6 +60,7 @@ export const escrowStateEnum = pgEnum("escrow_state", [
   "refunded",
 ]);
 export const userRoleEnum = pgEnum("user_role", ["smb", "builder"]);
+export const waitlistStatusEnum = pgEnum("waitlist_status", ["pending", "approved", "rejected"]);
 
 // ─── AUTH TABLES (Better Auth) ───
 
@@ -286,6 +287,23 @@ export const jobs = pgTable("jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ─── ESCROW ───
+
+// ─── WAITLIST ───
+
+export const waitlist = pgTable(
+  "waitlist",
+  {
+    id: varchar("id", { length: 16 }).primaryKey(),
+    email: varchar("email", { length: 255 }).notNull().unique(),
+    imageUri: varchar("image_uri", { length: 500 }),
+    status: waitlistStatusEnum("status").default("pending").notNull(),
+    slotNumber: integer("slot_number"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("waitlist_email_idx").on(table.email)],
+);
 
 // ─── ESCROW ───
 

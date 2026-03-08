@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import "dotenv/config";
 import { db, schema, isDbAvailable } from "./db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { auth } from "./auth.js";
 import {
   isStripeEnabled,
@@ -512,6 +512,51 @@ app.get("/api/config/wrapper-spec", (c) => c.json(WRAPPER_SPEC));
 app.get("/api/config/scan-phases", (c) => c.json(SCAN_PHASES));
 app.get("/api/config/pipeline-stages", (c) => c.json(PIPELINE_STAGES));
 app.get("/api/config/status-cfg", (c) => c.json(STATUS_CFG));
+
+// ─── WAITLIST ───
+
+const FOUNDING_TOTAL = 50;
+
+app.get("/api/waitlist/stats", async (c) => {
+  if (!isDbAvailable()) return c.json({ total: FOUNDING_TOTAL, taken: 23, remaining: 27 });
+  const [{ value: taken }] = await db.select({ value: count() }).from(schema.waitlist);
+  return c.json({ total: FOUNDING_TOTAL, taken, remaining: FOUNDING_TOTAL - taken });
+});
+
+app.post("/api/waitlist", async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const { email, imageUri } = await c.req.json();
+  if (!email || !email.includes("@") || !email.includes(".")) {
+    return c.json({ error: "Valid email is required" }, 400);
+  }
+
+  // Check for duplicate
+  const existing = await db
+    .select()
+    .from(schema.waitlist)
+    .where(eq(schema.waitlist.email, email.toLowerCase().trim()));
+  if (existing.length > 0) {
+    return c.json({ error: "This email is already on the waitlist" }, 409);
+  }
+
+  // Check capacity
+  const [{ value: taken }] = await db.select({ value: count() }).from(schema.waitlist);
+  if (taken >= FOUNDING_TOTAL) {
+    return c.json({ error: "All founding slots have been claimed" }, 410);
+  }
+
+  const id = `wl-${String(taken + 1).padStart(3, "0")}`;
+  const [entry] = await db
+    .insert(schema.waitlist)
+    .values({
+      id,
+      email: email.toLowerCase().trim(),
+      imageUri: imageUri || null,
+      slotNumber: taken + 1,
+    })
+    .returning();
+  return c.json({ success: true, slotNumber: entry.slotNumber, remaining: FOUNDING_TOTAL - entry.slotNumber }, 201);
+});
 
 // ─── HEALTH ───
 

@@ -138,3 +138,13 @@ export async function fetchPipelineStages() {
 export async function fetchStatusCfg() {
   return fetchJson("/config/status-cfg");
 }
+
+// ─── WAITLIST ───
+
+export async function submitWaitlist(data) {
+  return postJson("/waitlist", data);
+}
+
+export async function fetchWaitlistStats() {
+  return fetchJson("/waitlist/stats");
+}
