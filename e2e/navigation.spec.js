@@ -25,7 +25,7 @@ test.describe("Route navigation", () => {
 
     // Click Live tab
     await page.locator("text=⚡").click();
-    await expect(page.locator("text=LIVE")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Live" })).toBeVisible();
 
     // Click Registry tab
     await page.locator("text=⬡").click();
