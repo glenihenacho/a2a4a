@@ -61,6 +61,8 @@ export const escrowStateEnum = pgEnum("escrow_state", [
 ]);
 export const userRoleEnum = pgEnum("user_role", ["smb", "builder"]);
 export const waitlistStatusEnum = pgEnum("waitlist_status", ["pending", "approved", "rejected"]);
+export const auditActorEnum = pgEnum("audit_actor_type", ["user", "system", "webhook", "agent"]);
+export const auditSeverityEnum = pgEnum("audit_severity", ["info", "warn", "critical"]);
 
 // ─── AUTH TABLES (Better Auth) ───
 
@@ -306,6 +308,37 @@ export const waitlist = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("waitlist_email_idx").on(table.email)],
+);
+
+// ─── ESCROW ───
+
+// ─── AUDIT LOG ───
+
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    actorType: auditActorEnum("actor_type").notNull(),
+    actorId: text("actor_id"),
+    eventType: varchar("event_type", { length: 100 }).notNull(),
+    entityType: varchar("entity_type", { length: 50 }),
+    entityId: varchar("entity_id", { length: 64 }),
+    requestId: varchar("request_id", { length: 64 }),
+    sessionId: varchar("session_id", { length: 64 }),
+    jobId: varchar("job_id", { length: 16 }),
+    escrowId: varchar("escrow_id", { length: 16 }),
+    stripeEventId: varchar("stripe_event_id", { length: 64 }),
+    severity: auditSeverityEnum("severity").default("info").notNull(),
+    metadata: jsonb("metadata"),
+    ipHash: varchar("ip_hash", { length: 16 }),
+    userAgent: varchar("user_agent", { length: 500 }),
+  },
+  (table) => [
+    index("audit_log_event_type_idx").on(table.eventType),
+    index("audit_log_entity_idx").on(table.entityType, table.entityId),
+    index("audit_log_created_at_idx").on(table.createdAt),
+  ],
 );
 
 // ─── ESCROW ───
