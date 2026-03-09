@@ -18,12 +18,33 @@ import {
   PLATFORM_FEE_PCT,
 } from "./stripe.js";
 import { lockEscrow, releaseEscrow, refundEscrow, calculateRefund } from "./escrow.js";
-import { log, requestId, requestLogger } from "./logging.js";
+import {
+  log,
+  requestId,
+  requestLogger,
+  flushLogs,
+  initSentry,
+  captureException,
+  flushSentry,
+  metricsMiddleware,
+  metricsHandler,
+  stripeWebhookTotal,
+  stripeWebhookFailures,
+  jobRunsTotal,
+  escrowLockedTotal,
+  escrowReleasedTotal,
+  escrowRefundedTotal,
+  audit,
+  AuditEvent,
+} from "./observability/index.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ─── SENTRY INIT (before app) ───
+await initSentry();
 
 const app = new Hono();
 
@@ -31,6 +52,7 @@ const app = new Hono();
 
 app.use("*", requestId());
 app.use("*", requestLogger());
+app.use("*", metricsMiddleware());
 
 const APP_BASE_URL = process.env.APP_URL || "http://localhost:5173";
 
@@ -84,10 +106,14 @@ app.onError((err, c) => {
   if (err instanceof SyntaxError && err.message.includes("JSON")) {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
-  log.error(`${c.req.method} ${c.req.path}: ${err.message}`, {
+  const ctx = {
     requestId: c.get("requestId"),
-    stack: err.stack,
-  });
+    route: c.req.path,
+    method: c.req.method,
+    userId: c.get("user")?.id,
+  };
+  log.error(`${c.req.method} ${c.req.path}: ${err.message}`, { ...ctx, stack: err.stack });
+  captureException(err, ctx);
   return c.json({ error: "Internal server error" }, 500);
 });
 
@@ -482,6 +508,17 @@ app.post("/api/jobs", requireAuth, requireDb, async (c) => {
     .insert(schema.jobs)
     .values({ id, ...validated, userId: user.id })
     .returning();
+  jobRunsTotal.inc({ vertical: validated.vertical, status: "created" });
+  await audit(db, schema, {
+    actorType: "user",
+    actorId: user.id,
+    eventType: AuditEvent.JOB_CREATED,
+    entityType: "job",
+    entityId: id,
+    requestId: c.get("requestId"),
+    jobId: id,
+    metadata: { agentId: validated.agentId, intentId: validated.intentId, budgetCents: validated.budgetCents },
+  });
   return c.json(inserted, 201);
 });
 
@@ -529,6 +566,18 @@ app.post("/api/escrow", requireAuth, requireDb, async (c) => {
       stripePaymentIntentId: pi.id,
     })
     .returning();
+  await audit(db, schema, {
+    actorType: "user",
+    actorId: user.id,
+    eventType: AuditEvent.ESCROW_CREATED,
+    entityType: "escrow",
+    entityId: id,
+    requestId: c.get("requestId"),
+    jobId: jobId,
+    escrowId: id,
+    metadata: { amountCents, currency: currency || "USD", stripePaymentIntentId: pi.id },
+  });
+
   return c.json({ escrow: inserted, paymentIntent: { id: pi.id, status: pi.status } }, 201);
 });
 
@@ -545,6 +594,18 @@ app.post("/api/escrow/:id/lock", requireAuth, requireDb, async (c) => {
     if (job?.userId && job.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
 
     const updated = await lockEscrow(db, schema, escrowId);
+    escrowLockedTotal.inc();
+    await audit(db, schema, {
+      actorType: "user",
+      actorId: user.id,
+      eventType: AuditEvent.ESCROW_LOCKED,
+      entityType: "escrow",
+      entityId: escrowId,
+      requestId: c.get("requestId"),
+      escrowId,
+      jobId: esc.jobId,
+      metadata: { amountCents: esc.amountCents },
+    });
     return c.json(updated);
   } catch (err) {
     return c.json({ error: err.message }, 400);
@@ -580,6 +641,21 @@ app.post("/api/escrow/:id/release", requireAuth, requireDb, async (c) => {
       }
     }
 
+    escrowReleasedTotal.inc();
+    await audit(db, schema, {
+      actorType: "user",
+      actorId: user.id,
+      eventType: AuditEvent.ESCROW_RELEASED,
+      entityType: "escrow",
+      entityId: escrowId,
+      requestId: c.get("requestId"),
+      escrowId,
+      jobId: esc.jobId,
+      metadata: {
+        agentPayoutCents: escrowRow.agentPayoutCents,
+        platformFeeCents: escrowRow.platformFeeCents,
+      },
+    });
     return c.json(escrowRow);
   } catch (err) {
     return c.json({ error: err.message }, 400);
@@ -613,6 +689,24 @@ app.post("/api/escrow/:id/refund", requireAuth, requireDb, async (c) => {
         .where(eq(schema.escrow.id, escrowRow.id));
     }
 
+    escrowRefundedTotal.inc({ tier: escrowRow.refundTier });
+    await audit(db, schema, {
+      actorType: "user",
+      actorId: user.id,
+      eventType: AuditEvent.ESCROW_REFUNDED,
+      entityType: "escrow",
+      entityId: escrowId,
+      requestId: c.get("requestId"),
+      escrowId,
+      jobId: esc.jobId,
+      severity: "warn",
+      metadata: {
+        slaPct,
+        milestonesHit,
+        refundAmountCents: escrowRow.refundAmountCents,
+        refundTier: escrowRow.refundTier,
+      },
+    });
     return c.json(escrowRow);
   } catch (err) {
     return c.json({ error: err.message }, 400);
@@ -663,31 +757,70 @@ app.post("/api/webhooks/stripe", requireDb, async (c) => {
   const signature = c.req.header("stripe-signature");
   const body = await c.req.text();
 
-  const event = constructWebhookEvent(body, signature);
+  let event;
+  try {
+    event = constructWebhookEvent(body, signature);
+  } catch (err) {
+    stripeWebhookFailures.inc();
+    log.error("Stripe webhook verification failed", {
+      error: err.message,
+      requestId: c.get("requestId"),
+    });
+    captureException(err, { requestId: c.get("requestId"), route: "/api/webhooks/stripe" });
+    return c.json({ error: "Webhook verification failed" }, 400);
+  }
+
   if (!event) {
-    // No Stripe configured or invalid signature — acknowledge anyway in dev
+    // No Stripe configured — acknowledge in dev
     return c.json({ received: true, mode: "simulated" });
   }
+
+  stripeWebhookTotal.inc({ event_type: event.type });
+  await audit(db, schema, {
+    actorType: "webhook",
+    eventType: AuditEvent.STRIPE_WEBHOOK_RECEIVED,
+    requestId: c.get("requestId"),
+    stripeEventId: event.id,
+    metadata: { type: event.type },
+  });
 
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object;
-      // Find escrow by payment intent ID and lock it
       const [esc] = await db
         .select()
         .from(schema.escrow)
         .where(eq(schema.escrow.stripePaymentIntentId, pi.id));
       if (esc && esc.state === "pending") {
         await lockEscrow(db, schema, esc.id);
+        escrowLockedTotal.inc();
+        await audit(db, schema, {
+          actorType: "webhook",
+          eventType: AuditEvent.ESCROW_LOCKED,
+          entityType: "escrow",
+          entityId: esc.id,
+          requestId: c.get("requestId"),
+          escrowId: esc.id,
+          jobId: esc.jobId,
+          stripeEventId: event.id,
+          metadata: { paymentIntentId: pi.id },
+        });
       }
       break;
     }
     case "payment_intent.payment_failed": {
-      // Log failure — escrow stays pending, SMB can retry
       const pi = event.data.object;
       log.warn(`Payment failed for PI ${pi.id}`, {
         error: pi.last_payment_error?.message,
         requestId: c.get("requestId"),
+      });
+      await audit(db, schema, {
+        actorType: "webhook",
+        eventType: AuditEvent.STRIPE_PAYMENT_FAILED,
+        requestId: c.get("requestId"),
+        stripeEventId: event.id,
+        severity: "warn",
+        metadata: { paymentIntentId: pi.id, error: pi.last_payment_error?.message },
       });
       break;
     }
@@ -797,6 +930,11 @@ app.post("/api/waitlist", rateLimit({ windowMs: 60_000, max: 5 }), async (c) => 
   return c.json({ success: true, slotNumber: entry.slotNumber, remaining: FOUNDING_TOTAL - entry.slotNumber }, 201);
 });
 
+// ─── PROMETHEUS METRICS ───
+// Separate from /api/metrics (business dashboard data).
+
+app.get("/metrics", metricsHandler);
+
 // ─── HEALTH ───
 
 app.get("/api/health", (c) => {
@@ -831,15 +969,16 @@ const server = serve({ fetch: app.fetch, port, hostname }, () => {
 
 // ─── GRACEFUL SHUTDOWN ───
 
-function shutdown(signal) {
-  console.log(`${signal} received — shutting down gracefully`);
-  server.close(() => {
-    console.log("Server closed");
+async function shutdown(signal) {
+  log.info(`${signal} received — shutting down gracefully`);
+  server.close(async () => {
+    await Promise.all([flushLogs(), flushSentry()]);
+    log.info("Server closed");
     process.exit(0);
   });
   // Force exit after 30s if connections don't drain
   setTimeout(() => {
-    console.warn("Forcefully shutting down after timeout");
+    log.warn("Forcefully shutting down after timeout");
     process.exit(1);
   }, 30_000).unref();
 }
