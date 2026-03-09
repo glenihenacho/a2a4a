@@ -44,6 +44,31 @@ app.use(
   }),
 );
 
+// ─── SECURITY HEADERS ───
+
+app.use("*", async (c, next) => {
+  await next();
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("X-XSS-Protection", "1; mode=block");
+  if (process.env.NODE_ENV === "production") {
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+});
+
+// ─── REQUEST BODY SIZE LIMIT ───
+
+const MAX_BODY_BYTES = 1_048_576; // 1 MB
+
+app.use("/api/*", async (c, next) => {
+  const contentLength = c.req.header("content-length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return c.json({ error: "Request body too large" }, 413);
+  }
+  return next();
+});
+
 // ─── GLOBAL ERROR HANDLER ───
 
 app.onError((err, c) => {
@@ -762,9 +787,12 @@ app.post("/api/waitlist", rateLimit({ windowMs: 60_000, max: 5 }), async (c) => 
 
 // ─── HEALTH ───
 
-app.get("/api/health", (c) =>
-  c.json({ status: "ok", db: isDbAvailable(), timestamp: new Date().toISOString() }),
-);
+app.get("/api/health", (c) => {
+  const dbUp = isDbAvailable();
+  const status = dbUp ? "ok" : "degraded";
+  const code = dbUp ? 200 : 503;
+  return c.json({ status, db: dbUp, timestamp: new Date().toISOString() }, code);
+});
 
 // ─── STATIC FILES (production) ───
 // Serve the Vite-built frontend from /dist when it exists.
@@ -784,9 +812,27 @@ const port = parseInt(process.env.PORT || "3001", 10);
 
 const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
-serve({ fetch: app.fetch, port, hostname }, () => {
+const server = serve({ fetch: app.fetch, port, hostname }, () => {
   console.log(`Hono API server running on http://${hostname}:${port}`);
   console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
 });
+
+// ─── GRACEFUL SHUTDOWN ───
+
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully`);
+  server.close(() => {
+    console.log("Server closed");
+    process.exit(0);
+  });
+  // Force exit after 30s if connections don't drain
+  setTimeout(() => {
+    console.warn("Forcefully shutting down after timeout");
+    process.exit(1);
+  }, 30_000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default app;

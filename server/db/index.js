@@ -8,7 +8,11 @@ if (connectionString) {
   try {
     const { drizzle } = await import("drizzle-orm/postgres-js");
     const { default: postgres } = await import("postgres");
-    const client = postgres(connectionString);
+    const client = postgres(connectionString, {
+      max: 10,
+      idle_timeout: 30,
+      connect_timeout: 10,
+    });
     db = drizzle(client, { schema });
   } catch (err) {
     console.warn("Failed to initialize database connection:", err.message);

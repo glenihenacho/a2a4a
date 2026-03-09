@@ -88,6 +88,11 @@ export async function createAccountLink(accountId, refreshUrl, returnUrl) {
 export function constructWebhookEvent(body, signature) {
   if (!stripe) return null;
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!endpointSecret) return null;
+  if (!endpointSecret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("STRIPE_WEBHOOK_SECRET not set — refusing webhooks in production");
+    }
+    return null;
+  }
   return stripe.webhooks.constructEvent(body, signature, endpointSecret);
 }
