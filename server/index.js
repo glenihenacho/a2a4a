@@ -18,6 +18,7 @@ import {
   PLATFORM_FEE_PCT,
 } from "./stripe.js";
 import { lockEscrow, releaseEscrow, refundEscrow, calculateRefund } from "./escrow.js";
+import { log, requestId, requestLogger } from "./logging.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,11 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = new Hono();
+
+// ─── OBSERVABILITY ───
+
+app.use("*", requestId());
+app.use("*", requestLogger());
 
 const APP_BASE_URL = process.env.APP_URL || "http://localhost:5173";
 
@@ -78,7 +84,10 @@ app.onError((err, c) => {
   if (err instanceof SyntaxError && err.message.includes("JSON")) {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
-  console.error(`[ERROR] ${c.req.method} ${c.req.path}:`, err.message);
+  log.error(`${c.req.method} ${c.req.path}: ${err.message}`, {
+    requestId: c.get("requestId"),
+    stack: err.stack,
+  });
   return c.json({ error: "Internal server error" }, 500);
 });
 
@@ -676,7 +685,10 @@ app.post("/api/webhooks/stripe", requireDb, async (c) => {
     case "payment_intent.payment_failed": {
       // Log failure — escrow stays pending, SMB can retry
       const pi = event.data.object;
-      console.warn(`Payment failed for PI ${pi.id}: ${pi.last_payment_error?.message}`);
+      log.warn(`Payment failed for PI ${pi.id}`, {
+        error: pi.last_payment_error?.message,
+        requestId: c.get("requestId"),
+      });
       break;
     }
   }
