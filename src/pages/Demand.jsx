@@ -1203,12 +1203,15 @@ export default function DemandChat() {
   const { mob } = useMedia();
   const { data: session } = useSession();
 
-  // Fetch agents from API — overrides fallback agent data in scripted conversation
-  const { data: rawAgents } = useApiData(fetchAgents, null);
+  // Fetch agents from API — uses API data, falls back to built-in demo agents only for scripted demo
+  const { data: rawAgents } = useApiData(fetchAgents);
   const agents = useMemo(() => {
-    if (!rawAgents) return AGENTS_FALLBACK;
-    const byId = Object.fromEntries(rawAgents.map((a) => [a.id, toSimpleAgent(a)]));
-    return AGENTS_FALLBACK.map((f) => byId[f.id] || f);
+    if (rawAgents && rawAgents.length > 0) {
+      const byId = Object.fromEntries(rawAgents.map((a) => [a.id, toSimpleAgent(a)]));
+      return AGENTS_FALLBACK.map((f) => byId[f.id] || f);
+    }
+    // Demand Agent is a first-party demo — keep scripted agents for the conversation flow
+    return AGENTS_FALLBACK;
   }, [rawAgents]);
 
   const [messages, setMessages] = useState([]);

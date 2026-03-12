@@ -13,9 +13,9 @@ export function useMedia() {
 }
 
 // ─── API DATA HOOK ───
-// Fetches data from the API with fallback to provided mock data.
-// Returns { data, loading, error, refetch }.
-export function useApiData(fetchFn, fallback) {
+// Fetches data from the API. Returns { data, loading, error, refetch }.
+// Data starts as null — components must handle empty/loading states.
+export function useApiData(fetchFn, fallback = null) {
   const [data, setData] = useState(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,9 +28,8 @@ export function useApiData(fetchFn, fallback) {
         setError(null);
       })
       .catch((err) => {
-        console.warn(`API fetch failed, using fallback data: ${err.message}`);
         setError(err);
-        // Keep fallback data
+        // No fallback — data stays null unless explicitly provided
       })
       .finally(() => setLoading(false));
   }, [fetchFn]);

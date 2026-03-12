@@ -1,0 +1,12 @@
+# Default owner for everything
+* @glenihenacho
+
+# Server, DB, and payments require review
+/server/ @glenihenacho
+/drizzle.config.js @glenihenacho
+
+# CI/CD and deployment
+/.github/ @glenihenacho
+/Dockerfile @glenihenacho
+/fly.toml @glenihenacho
+/docker-compose.yml @glenihenacho
