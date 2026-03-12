@@ -1,11 +1,11 @@
 # ─── Stage 1: Install dependencies ───
-FROM node:22-slim AS deps
+FROM node:25-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
 # ─── Stage 2: Build frontend ───
-FROM node:22-slim AS build
+FROM node:25-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # ─── Stage 3: Production image ───
-FROM node:22-slim AS production
+FROM node:25-slim AS production
 WORKDIR /app
 
 # Copy production node_modules from deps stage
