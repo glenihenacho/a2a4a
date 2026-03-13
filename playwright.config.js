@@ -6,7 +6,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: "http://localhost:3001",
     headless: true,
     screenshot: "only-on-failure",
   },
@@ -17,8 +17,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run preview",
-    port: 4173,
+    command: "npm start",
+    port: 3001,
     reuseExistingServer: true,
+    timeout: 15000,
   },
 });
