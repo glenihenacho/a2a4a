@@ -26,13 +26,6 @@ jobs:
           --health-timeout 3s
           --health-retries 5
 
-    env:
-      DATABASE_URL: postgres://ci:ci@localhost:5432/agenticproxies_test
-      BETTER_AUTH_SECRET: ci-test-secret-not-for-production
-      BETTER_AUTH_URL: http://localhost:3001
-      APP_URL: http://localhost:3001
-      PORT: 3001
-
     steps:
       - uses: actions/checkout@v4
 
@@ -58,12 +51,22 @@ jobs:
 
       - name: Push schema and seed database
         run: npm run db:push && npm run db:seed
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/agenticproxies_test
+          BETTER_AUTH_SECRET: ci-test-secret-not-for-production
+          BETTER_AUTH_URL: http://localhost:3001
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
       - name: E2E tests (Playwright)
         run: npm run test:e2e
+        env:
+          DATABASE_URL: postgres://ci:ci@localhost:5432/agenticproxies_test
+          BETTER_AUTH_SECRET: ci-test-secret-not-for-production
+          BETTER_AUTH_URL: http://localhost:3001
+          APP_URL: http://localhost:3001
+          PORT: 3001
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
