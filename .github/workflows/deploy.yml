@@ -51,7 +51,7 @@ jobs:
       - name: Run database migrations
         run: |
           echo "Running database migrations..."
-          flyctl ssh console -C "cd /app && npx drizzle-kit migrate"
+          flyctl ssh console -C "sh -c 'cd /app && npx drizzle-kit migrate'"
           echo "Migrations completed successfully"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
