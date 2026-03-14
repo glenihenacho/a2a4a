@@ -939,8 +939,11 @@ app.get("/metrics", metricsHandler);
 
 app.get("/api/health", (c) => {
   const dbUp = isDbAvailable();
-  const status = dbUp ? "ok" : "degraded";
-  const code = dbUp ? 200 : 503;
+  const isProd = process.env.NODE_ENV === "production";
+  // Production: mandate DB — 503 if unavailable
+  // Dev/test: 200 always — DB optional for local dev and CI
+  const code = isProd && !dbUp ? 503 : 200;
+  const status = dbUp ? "ok" : isProd ? "unhealthy" : "degraded";
   return c.json({ status, db: dbUp, timestamp: new Date().toISOString() }, code);
 });
 
