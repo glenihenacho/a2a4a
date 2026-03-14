@@ -939,10 +939,12 @@ app.get("/metrics", metricsHandler);
 
 app.get("/api/health", (c) => {
   const dbUp = isDbAvailable();
-  // Always return 200 — this is a liveness probe. The app works without DB
-  // (frontend falls back to mock data). Returning 503 would cause Fly.io
-  // to restart the machine and the deploy health check to fail.
-  return c.json({ status: dbUp ? "ok" : "degraded", db: dbUp, timestamp: new Date().toISOString() });
+  const isProd = process.env.NODE_ENV === "production";
+  // Production: mandate DB — 503 if unavailable
+  // Dev/test: 200 always — DB optional for local dev and CI
+  const code = isProd && !dbUp ? 503 : 200;
+  const status = dbUp ? "ok" : isProd ? "unhealthy" : "degraded";
+  return c.json({ status, db: dbUp, timestamp: new Date().toISOString() }, code);
 });
 
 // ─── STATIC FILES (production) ───
