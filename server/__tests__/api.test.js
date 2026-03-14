@@ -5,9 +5,10 @@ import app from "../index.js";
 // Most data routes return 503 since DATABASE_URL is not set in test env.
 
 describe("API routes (no DB)", () => {
-  it("GET /api/health returns degraded without DB", async () => {
+  it("GET /api/health returns degraded without DB (non-production)", async () => {
     const res = await app.request("/api/health");
-    expect(res.status).toBe(503);
+    // In dev/test (NODE_ENV !== "production"), health returns 200 even without DB
+    expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.status).toBe("degraded");
     expect(body.db).toBe(false);
