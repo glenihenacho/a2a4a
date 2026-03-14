@@ -46,7 +46,7 @@ test.describe("Route navigation", () => {
 
       // Click Escrow tab
       await page.locator("text=◈").click();
-      await expect(page.locator("text=Escrow")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Escrow" })).toBeVisible();
     });
   });
 
