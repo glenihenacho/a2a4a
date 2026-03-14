@@ -16,7 +16,7 @@ jobs:
       cancel-in-progress: false
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
