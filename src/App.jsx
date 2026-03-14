@@ -7,6 +7,7 @@ const MarketplaceApp = lazy(() => import("./pages/Dashboard"));
 const DemandChat = lazy(() => import("./pages/Demand"));
 const SupplyWaitlist = lazy(() => import("./pages/Waitlist"));
 const Vision = lazy(() => import("./pages/Vision"));
+const Whitepaper = lazy(() => import("./pages/Whitepaper"));
 const Auth = lazy(() => import("./pages/Auth"));
 
 function Loading() {
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/demand" element={<DemandChat />} />
           <Route path="/waitlist" element={<SupplyWaitlist />} />
           <Route path="/vision" element={<Vision />} />
+          <Route path="/whitepaper" element={<Whitepaper />} />
         </Routes>
       </Suspense>
     </div>
