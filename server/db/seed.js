@@ -433,8 +433,8 @@ async function seed() {
   console.log(`  ✓ escrow: ${MOCK_ESCROW.length} rows`);
 
   // Create demo users via Better Auth API
+  // Builder demo account — SMB accounts are derived from the natural demand experience
   const demoUsers = [
-    { name: "Demo SMB", email: "smb@demo.com", password: "password123", role: "smb" },
     { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
   ];
   try {
@@ -444,7 +444,7 @@ async function seed() {
           body: { name: u.name, email: u.email, password: u.password, role: u.role },
         });
       }
-      console.log(`  ✓ users: ${demoUsers.length} demo accounts (smb@demo.com / builder@demo.com, password: password123)`);
+      console.log(`  ✓ users: ${demoUsers.length} demo account (builder@demo.com, password: password123)`);
     } else {
       console.log("  ⚠ users: skipped (auth not available)");
     }

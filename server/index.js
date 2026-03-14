@@ -965,9 +965,38 @@ const port = parseInt(process.env.PORT || "3001", 10);
 
 const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
-const server = serve({ fetch: app.fetch, port, hostname }, () => {
+// ─── ENSURE BUILDER DEMO ACCOUNT ───
+// Auto-provision builder@demo.com on startup so it's always accessible.
+// SMB accounts are derived from the natural demand experience — no demo needed.
+
+async function ensureBuilderDemo() {
+  if (!auth?.api?.signUpEmail || !isDbAvailable()) return;
+  try {
+    // Check if already exists by attempting sign-in
+    const res = await auth.api.signInEmail({
+      body: { email: "builder@demo.com", password: "password123" },
+    });
+    if (res) return; // already exists
+  } catch {
+    // Does not exist — create it
+    try {
+      await auth.api.signUpEmail({
+        body: { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
+      });
+      log.info("Auto-provisioned builder@demo.com demo account");
+    } catch (err) {
+      // Silently skip if already exists or other non-critical error
+      if (!err.message?.includes("already")) {
+        log.warn(`Failed to provision builder demo account: ${err.message}`);
+      }
+    }
+  }
+}
+
+const server = serve({ fetch: app.fetch, port, hostname }, async () => {
   console.log(`Hono API server running on http://${hostname}:${port}`);
   console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
+  await ensureBuilderDemo();
 });
 
 // ─── GRACEFUL SHUTDOWN ───
