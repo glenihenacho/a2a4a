@@ -6,15 +6,15 @@ const PHASES = [
   {
     id: 1,
     label: "PHASE 01",
-    title: "The Marketplace Goes Live",
+    title: "Prove the Engine",
     timeline: "Now",
     description:
-      "SMBs post what they need. AI agents fight for the work. The best performer wins. Every dollar is escrowed until results land.",
+      "SEO and AI Overview optimisation are the first two verticals — high pain, measurable outcomes, massive demand. The system that runs them is the product.",
     highlights: [
-      "Real demand from real businesses",
-      "Agents ranked by results, not promises",
+      "Two verticals proving one engine",
+      "Agents ranked by delivered results",
       "Escrow-protected from dollar one",
-      "Two verticals: SEO + AI Overviews",
+      "Every job trains the platform",
     ],
     accent: "#2196F3",
   },
@@ -24,26 +24,26 @@ const PHASES = [
     title: "The Token Unlocks the Network",
     timeline: "Post-Launch",
     description:
-      "A utility token that does what tokens should — governs access, rewards commitment, and aligns every participant around performance.",
+      "A utility token that aligns every participant — agents, businesses, and the platform itself — around performance. Stake to compete, earn to grow, govern together.",
     highlights: [
-      "Stake to compete, earn to grow",
+      "Staking gates access, performance keeps it",
       "Fee structures that reward loyalty",
       "On-chain settlement, instant finality",
-      "Community-driven governance",
+      "Community-driven vertical expansion",
     ],
     accent: "#64B5F6",
   },
   {
     id: 3,
     label: "PHASE 03",
-    title: "Agents Run the Economy",
+    title: "Every Vertical. Every Agent. Autonomous.",
     timeline: "The Horizon",
     description:
-      "A fully autonomous agent labour market. Agents bid, negotiate, execute, and settle — without human intervention. Across every vertical.",
+      "The engine deploys into vertical after vertical — paid ads, compliance, logistics, support, finance. Each one feeds the core with new training data, workflows, benchmarks, and conversion intelligence.",
     highlights: [
-      "Open registration, performance-gated",
+      "Open vertical registration",
       "Autonomous bidding and settlement",
-      "Multi-vertical expansion beyond SEO",
+      "Cross-vertical agent reputation",
       "Agentic wallets with native payments",
     ],
     accent: "#B0BEC5",
@@ -51,35 +51,39 @@ const PHASES = [
 ];
 
 const STATS = [
-  { value: "16–20%", label: "of all searches now surface AI Overviews", sub: "And accelerating" },
-  { value: "–34%", label: "organic CTR collapse post-AIO", sub: "The old playbook is dead" },
-  { value: "60%", label: "of users have already encountered AIO", sub: "Mainstream, not emerging" },
-  { value: "33%", label: "of all traffic still flows through organic", sub: "Trillions at stake" },
+  {
+    value: "$200B+",
+    label: "spent annually on high-friction service categories",
+    sub: "Agencies own this. Not for long.",
+  },
+  { value: "0%", label: "of service spend is performance-gated today", sub: "Retainers reward effort, not outcomes" },
+  { value: "16–20%", label: "of searches now surface AI Overviews", sub: "Our first vertical is already urgent" },
+  { value: "–34%", label: "organic CTR collapse post-AIO", sub: "Trillions at stake" },
 ];
 
 const PRINCIPLES = [
   {
     icon: "◈",
-    title: "Performance Is the Only Currency",
-    desc: "No retainers. No billable hours. Agents get paid when they deliver measurable results — or they don't get paid at all.",
+    title: "Horizontal Engine, Vertical Distribution",
+    desc: "We are not building a niche tool. We are building a repeatable system — escrow, SLAs, agent ranking, container execution — that deploys into any high-friction service category.",
     color: "#2196F3",
   },
   {
     icon: "⛓",
-    title: "Every Dollar Is Protected",
-    desc: "Funds lock in escrow before a single task executes. SLA verification triggers release. Miss the mark, the money returns.",
+    title: "Every Vertical Feeds the Core",
+    desc: "Each new vertical expands the training data, sharpens the workflows, deepens the benchmarks, and strengthens the conversion intelligence that powers every other vertical.",
     color: blue,
   },
   {
     icon: "⚡",
-    title: "Agents Compete. Businesses Win.",
-    desc: "Ad-ranked positioning means the hungriest, highest-performing agents rise to the top. Reputation is earned, never bought.",
+    title: "Performance Is the Only Currency",
+    desc: "No retainers. No billable hours. Agents get paid when they deliver measurable results — or they don't get paid at all. Escrow guarantees it.",
     color: "#90CAF9",
   },
   {
     icon: "◎",
-    title: "Built for the AI-Native Era",
-    desc: "While others optimise for yesterday's search, we're building the marketplace for tomorrow's — where AI decides what users see.",
+    title: "Agents Compete. Businesses Win.",
+    desc: "Ad-ranked positioning means the hungriest, highest-performing agents rise to the top across every vertical. Reputation is earned, never bought.",
     color: "#B0BEC5",
   },
 ];
@@ -242,7 +246,7 @@ export default function Vision() {
 
   useEffect(() => {
     const h = () => {
-      for (const id of ["principles", "roadmap", "problem"]) {
+      for (const id of ["principles", "roadmap", "engine", "problem"]) {
         const el = document.getElementById(id);
         if (el && el.getBoundingClientRect().top < 200) {
           setActiveSection(id);
@@ -261,7 +265,7 @@ export default function Vision() {
     return () => window.removeEventListener("scroll", close);
   }, [menuOpen]);
 
-  const navLinks = ["Problem", "Roadmap", "Principles"];
+  const navLinks = ["Problem", "Engine", "Roadmap", "Principles"];
 
   return (
     <div
@@ -480,7 +484,7 @@ export default function Vision() {
                 textTransform: "uppercase",
               }}
             >
-              The Future of Search Optimization
+              The Autonomous Service Economy
             </span>
           </div>
         </FadeIn>
@@ -495,11 +499,11 @@ export default function Vision() {
               maxWidth: 1000,
             }}
           >
-            <span style={{ color: "#fff" }}>The world&apos;s first</span>
+            <span style={{ color: "#fff" }}>One engine.</span>
             <br />
-            <span style={{ color: blue }}>AI agent marketplace</span>
+            <span style={{ color: blue }}>Every vertical.</span>
             <br />
-            <span style={{ color: "#fff" }}>for search dominance</span>
+            <span style={{ color: "#fff" }}>Autonomous delivery.</span>
           </h1>
         </FadeIn>
         <FadeIn delay={0.25}>
@@ -513,9 +517,9 @@ export default function Vision() {
               marginTop: 32,
             }}
           >
-            Google changed the rules. AI Overviews are rewriting search results in real time, crushing organic traffic
-            and making traditional SEO a losing game. The businesses that adapt will own the next decade of digital
-            visibility. The ones that don&apos;t will disappear.
+            Hundreds of billions are spent every year on high-friction services — SEO, paid ads, compliance, support,
+            logistics — through agencies and contractors who bill for effort, not outcomes. The entire model is broken.
+            Nobody pays for results because nobody can guarantee them.
           </p>
           <p
             style={{
@@ -527,8 +531,9 @@ export default function Vision() {
               marginTop: 16,
             }}
           >
-            AgenticProxies is where autonomous AI agents compete to deliver measurable SEO and AIO results for your
-            business — with every dollar locked in escrow until they prove it worked.
+            AgenticProxies is a horizontal engine that deploys into these categories one by one — replacing retainers
+            with autonomous AI agents that compete on performance, settle through escrow, and only get paid when they
+            deliver. Every vertical we enter makes the engine smarter.
           </p>
         </FadeIn>
         <FadeIn delay={0.4}>
@@ -638,7 +643,7 @@ export default function Vision() {
             The Problem
           </div>
           <h2 style={{ fontFamily: ft.display, fontSize: 36, fontWeight: 700, marginBottom: 16, maxWidth: 700 }}>
-            Search Is Being Rewritten. Most Businesses Are Already Behind.
+            High-Friction Services Are Broken. AI Agents Are the Fix.
           </h2>
           <p
             style={{
@@ -650,9 +655,9 @@ export default function Vision() {
               marginBottom: 48,
             }}
           >
-            AI Overviews have fundamentally changed what it means to rank. The old SEO playbook — keywords, backlinks,
-            technical audits — still matters, but it&apos;s no longer enough. Businesses now need to optimise for two
-            realities simultaneously: traditional search and AI-curated answers.
+            Every high-friction service category shares the same disease: opaque pricing, unverifiable quality, and zero
+            accountability. Businesses pay retainers for effort and hope for results. AI agents can guarantee outcomes —
+            but only if the infrastructure exists to match, execute, verify, and settle autonomously.
           </p>
         </FadeIn>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
@@ -729,7 +734,7 @@ export default function Vision() {
                   marginBottom: 14,
                 }}
               >
-                AI Overviews Are Eating the Click
+                Why We Start with Search
               </h3>
               <p
                 style={{
@@ -739,10 +744,10 @@ export default function Vision() {
                   color: "rgba(227,242,253,.45)",
                 }}
               >
-                AI Overviews compress the entire customer journey into a single answer box. Clicks vanish. Brands that
-                aren&apos;t cited in that box become invisible overnight. There is no second page anymore — there&apos;s
-                barely a first one. The businesses that get structured, authoritative, AI-optimised content in front of
-                these models will own their category. Everyone else will wonder where their traffic went.
+                SEO and AI Overview optimisation are the perfect proving ground — high pain, quantifiable outcomes,
+                massive spend, and a market being violently disrupted by AI Overviews. A third of all traffic is
+                organic. AI is rewriting where it goes. The urgency is real, the demand is enormous, and the results are
+                measurable down to the click.
               </p>
             </div>
             <div>
@@ -755,7 +760,7 @@ export default function Vision() {
                   marginBottom: 14,
                 }}
               >
-                SEO Isn&apos;t Dead. It&apos;s Higher Stakes.
+                The Flywheel
               </h3>
               <p
                 style={{
@@ -765,18 +770,21 @@ export default function Vision() {
                   color: "rgba(227,242,253,.45)",
                 }}
               >
-                A third of all website traffic still comes from organic search. The ROI is still unmatched. But the bar
-                has been raised — you need AI-grade technical execution, not agencies billing hours for keyword reports.
-                Performance-based models are the future: you pay for rankings that move, traffic that grows, and
-                conversions that land.
+                Every job executed trains the platform. Every vertical entered expands the training data, sharpens SLA
+                benchmarks, deepens conversion intelligence, and attracts more agents. The advantage compounds — not
+                linearly, but exponentially. The engine that runs SEO today runs paid ads, compliance, logistics, and
+                support tomorrow. Same escrow. Same ranking. Same settlement. New category.
               </p>
             </div>
           </div>
         </FadeIn>
       </section>
 
-      {/* THE SOLUTION — Quick pitch */}
-      <section style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "40px 32px 80px" }}>
+      {/* THE ENGINE */}
+      <section
+        id="engine"
+        style={{ position: "relative", zIndex: 1, maxWidth: 1200, margin: "0 auto", padding: "40px 32px 80px" }}
+      >
         <FadeIn>
           <div
             style={{
@@ -815,7 +823,7 @@ export default function Vision() {
                 marginBottom: 20,
               }}
             >
-              The Solution
+              The Engine
             </div>
             <h2
               style={{
@@ -827,7 +835,7 @@ export default function Vision() {
                 margin: "0 auto 24px",
               }}
             >
-              A marketplace where AI agents compete to grow your business — and only get paid when they deliver
+              Not a marketplace for one niche — a system that productizes every high-friction service category
             </h2>
             <p
               style={{
@@ -839,9 +847,9 @@ export default function Vision() {
                 margin: "0 auto",
               }}
             >
-              AgenticProxies connects SMBs with specialised AI agents that execute SEO and AI Overview optimisation
-              autonomously. No agencies. No retainers. No guesswork. Agents bid for your work, funds lock in escrow,
-              results are verified against SLA targets, and payment releases only on proven performance.
+              AgenticProxies is a horizontal platform where autonomous AI agents compete for work, execute in sandboxed
+              containers, settle through escrow, and get paid only on verified delivery. The verticals change. The
+              engine doesn&apos;t. We start with SEO and AI Overviews — then we deploy everywhere.
             </p>
           </div>
         </FadeIn>
@@ -867,7 +875,7 @@ export default function Vision() {
             Roadmap
           </div>
           <h2 style={{ fontFamily: ft.display, fontSize: 36, fontWeight: 700, marginBottom: 48 }}>
-            From Marketplace to Autonomous Economy
+            From First Vertical to Autonomous Economy
           </h2>
         </FadeIn>
         <div style={{ display: "grid", gap: 24 }}>
@@ -977,7 +985,7 @@ export default function Vision() {
                 marginBottom: 16,
               }}
             >
-              The agents are ready. Is your business?
+              The first vertical is live. The engine is ready.
             </h2>
             <p
               style={{
@@ -989,8 +997,8 @@ export default function Vision() {
                 lineHeight: 1.7,
               }}
             >
-              Join the first cohort of businesses and agent builders shaping the future of autonomous search
-              optimisation.
+              Join the founding cohort of businesses and agent builders shaping the autonomous service economy —
+              starting with search, expanding everywhere.
             </p>
             <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
               <a
@@ -1090,7 +1098,7 @@ export default function Vision() {
           </span>
         </div>
         <div style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(227,242,253,.18)" }}>
-          The Autonomous Search Marketplace
+          The Autonomous Service Economy
         </div>
       </footer>
     </div>
