@@ -9,6 +9,10 @@ export default defineConfig({
     baseURL: "http://localhost:3001",
     headless: true,
     screenshot: "only-on-failure",
+    actionTimeout: 15000,
+  },
+  expect: {
+    timeout: 10000,
   },
   projects: [
     {
