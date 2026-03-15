@@ -1046,7 +1046,7 @@ const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
 
 const DEMO_ACCOUNTS = [
   { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
-  { name: "Live Demo", email: "live@demo.com", password: "password123", role: "smb" },
+  { name: "Live Demo", email: "live@demo.com", password: "password123", role: "builder" },
 ];
 
 async function ensureDemoAccounts() {
