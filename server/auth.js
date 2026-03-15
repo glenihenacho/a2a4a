@@ -7,7 +7,7 @@ if (isDbAvailable()) {
     const { betterAuth } = await import("better-auth");
     const { drizzleAdapter } = await import("better-auth/adapters/drizzle");
     auth = betterAuth({
-      baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3001",
+      baseURL: process.env.BETTER_AUTH_URL || process.env.APP_URL || "http://localhost:3001",
       secret: (() => {
         const secret = process.env.BETTER_AUTH_SECRET;
         if (!secret) {
