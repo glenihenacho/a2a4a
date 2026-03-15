@@ -1,5 +1,6 @@
-// ─── DEMO DATA (extracted from seed.js for auto-seeding on startup) ───
-// This module is dynamically imported by server/index.js when the DB is empty.
+// ─── DEMO DATA (extracted from seed.js for per-user fallbacks) ───
+// Dynamically imported by server/index.js for demo account fallbacks.
+// builder@demo.com → full data, live@demo.com → market data only.
 
 const REVENUE_MONTHS = [
   { month: "Sep", clearing: 2400, milestones: 1800, total: 4200 },
@@ -277,3 +278,18 @@ export async function seedDemoData(db, schema) {
     });
   }
 }
+
+// ─── NAMED EXPORTS (for per-user fallbacks in API routes) ───
+
+export {
+  REVENUE_MONTHS,
+  TRANSACTIONS,
+  MOCK_AGENTS,
+  MOCK_INTENTS,
+  SLA_TEMPLATES,
+  INTENT_MARKET,
+  LIVE_SIGNALS,
+  INTENT_CATEGORIES,
+  MOCK_JOBS,
+  MOCK_ESCROW,
+};

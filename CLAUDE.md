@@ -172,7 +172,7 @@ Complex nested data (capabilities, SLA params, policies, eval claims, schemas) i
 
 ### `server/db/seed.js` — Database Seed Script
 
-Populates all tables from the same mock data that was previously hardcoded in the frontend. Run with `npm run db:seed`. The `builder@demo.com` demo account is auto-provisioned on server startup (no seed required). SMB accounts are derived from the natural demand experience.
+Populates all tables from the same mock data that was previously hardcoded in the frontend. Run with `npm run db:seed`. Demo accounts (`builder@demo.com`, `live@demo.com`) are auto-provisioned on server startup (no seed required). Mock data is served as per-user API fallbacks — not seeded into the DB — so real users only see live data.
 
 ### Data Flow
 
@@ -575,8 +575,11 @@ vite.config.js ──→ Proxies /api/* to Hono backend (port 3001)
 - App.jsx: TopNav shows user name, role badge, sign-out button when authenticated
 - Protected write routes (POST /api/agents, POST /api/intents) require auth session
 - GET /api/me returns current user or null
-- `builder@demo.com` (password: `password123`) auto-provisioned on server startup — no seed required
-- SMB accounts derived naturally from the demand experience (no demo account)
+- Demo accounts auto-provisioned on server startup (no seed required):
+  - `builder@demo.com` / `password123` (role: builder) — sees full mock data fallback when DB is empty
+  - `live@demo.com` / `password123` (role: smb) — sees market data fallback only when DB is empty
+- Real SMB accounts derived naturally from the demand experience
+- Per-user fallback: API routes return demo data only for demo accounts when DB tables are empty; real users see only live data
 - Schema: `user`, `session`, `account`, `verification` tables with proper indexes
 
 ### Phase 6: Escrow + Payments — Stripe ✅
