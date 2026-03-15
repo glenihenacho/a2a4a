@@ -266,6 +266,27 @@ async function getSession(c) {
   return session;
 }
 
+// ─── DEMO FALLBACK SCOPE ───
+// Returns 'full' for builder@demo.com, 'market' for live@demo.com, null otherwise.
+// Used by GET routes to return mock data when DB tables are empty.
+
+let _demoData = null;
+async function loadDemoData() {
+  if (!_demoData) {
+    _demoData = await import("./db/seedData.js");
+  }
+  return _demoData;
+}
+
+async function getDemoScope(c) {
+  const session = await getSession(c);
+  if (!session) return null;
+  const email = session.user?.email;
+  if (email === "builder@demo.com") return "full";
+  if (email === "live@demo.com") return "market";
+  return null;
+}
+
 // Middleware: require authenticated session for write operations
 async function requireAuth(c, next) {
   const session = await getSession(c);
@@ -371,38 +392,28 @@ const STATUS_CFG = {
 
 // ─── AGENTS ───
 
+function reshapeAgent(r) {
+  return {
+    id: r.id, name: r.name, avatar: r.avatar, version: r.version, verified: r.verified,
+    signedAt: r.signedAt ? (typeof r.signedAt === "string" ? r.signedAt : r.signedAt.toISOString()) : null,
+    status: r.status, verticals: r.verticals, description: r.description,
+    capabilities: r.capabilities, inputSchema: r.inputSchema, outputSchema: r.outputSchema,
+    toolRequirements: r.toolRequirements, sla: r.sla, policy: r.policy, evalClaims: r.evalClaims,
+    stats: { totalRuns: r.totalRuns, successRate: r.successRate, avgRuntime: r.avgRuntime, avgCost: r.avgCost, activeContracts: r.activeContracts, reputation: r.reputation },
+    monthlyRev: r.monthlyRev, wins: r.wins,
+  };
+}
+
 app.get("/api/agents", requireDb, async (c) => {
   const rows = await db.select().from(schema.agents);
-  // Reshape to match frontend MOCK_AGENTS format
-  const agents = rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    avatar: r.avatar,
-    version: r.version,
-    verified: r.verified,
-    signedAt: r.signedAt ? r.signedAt.toISOString() : null,
-    status: r.status,
-    verticals: r.verticals,
-    description: r.description,
-    capabilities: r.capabilities,
-    inputSchema: r.inputSchema,
-    outputSchema: r.outputSchema,
-    toolRequirements: r.toolRequirements,
-    sla: r.sla,
-    policy: r.policy,
-    evalClaims: r.evalClaims,
-    stats: {
-      totalRuns: r.totalRuns,
-      successRate: r.successRate,
-      avgRuntime: r.avgRuntime,
-      avgCost: r.avgCost,
-      activeContracts: r.activeContracts,
-      reputation: r.reputation,
-    },
-    monthlyRev: r.monthlyRev,
-    wins: r.wins,
-  }));
-  return c.json(agents);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope === "full") {
+      const { MOCK_AGENTS } = await loadDemoData();
+      return c.json(MOCK_AGENTS.map(reshapeAgent));
+    }
+  }
+  return c.json(rows.map(reshapeAgent));
 });
 
 app.get("/api/agents/:id", requireDb, async (c) => {
@@ -439,6 +450,13 @@ app.post("/api/agents", requireAuth, requireRole("builder"), requireDb, async (c
 
 app.get("/api/intents", requireDb, async (c) => {
   const rows = await db.select().from(schema.intents);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope === "full") {
+      const { MOCK_INTENTS } = await loadDemoData();
+      return c.json(MOCK_INTENTS);
+    }
+  }
   return c.json(rows);
 });
 
@@ -465,6 +483,13 @@ app.post("/api/intents", requireAuth, requireRole("smb"), requireDb, async (c) =
 
 app.get("/api/transactions", requireDb, async (c) => {
   const rows = await db.select().from(schema.transactions);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope === "full") {
+      const { TRANSACTIONS } = await loadDemoData();
+      return c.json(TRANSACTIONS);
+    }
+  }
   return c.json(rows);
 });
 
@@ -472,6 +497,13 @@ app.get("/api/transactions", requireDb, async (c) => {
 
 app.get("/api/signals", requireDb, async (c) => {
   const rows = await db.select().from(schema.signals);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope) {
+      const { LIVE_SIGNALS } = await loadDemoData();
+      return c.json(LIVE_SIGNALS);
+    }
+  }
   return c.json(rows);
 });
 
@@ -479,6 +511,13 @@ app.get("/api/signals", requireDb, async (c) => {
 
 app.get("/api/jobs", requireDb, async (c) => {
   const rows = await db.select().from(schema.jobs);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope === "full") {
+      const { MOCK_JOBS } = await loadDemoData();
+      return c.json(MOCK_JOBS);
+    }
+  }
   return c.json(rows);
 });
 
@@ -526,6 +565,13 @@ app.post("/api/jobs", requireAuth, requireDb, async (c) => {
 
 app.get("/api/escrow", requireDb, async (c) => {
   const rows = await db.select().from(schema.escrow);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope === "full") {
+      const { MOCK_ESCROW } = await loadDemoData();
+      return c.json(MOCK_ESCROW);
+    }
+  }
   return c.json(rows);
 });
 
@@ -842,18 +888,27 @@ app.get("/api/stripe/status", (c) => {
 
 app.get("/api/metrics", requireDb, async (c) => {
   const revenue = await db.select().from(schema.revenueMonths);
-  return c.json({
-    revenue,
-    perf: PERF_METRICS,
-    verticalSplit: VERTICAL_SPLIT,
-    trendingUp: TRENDING_UP,
-  });
+  if (revenue.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope) {
+      const { REVENUE_MONTHS } = await loadDemoData();
+      return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+    }
+  }
+  return c.json({ revenue, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
 });
 
 // ─── INTENT MARKET ───
 
 app.get("/api/intent-market", requireDb, async (c) => {
   const rows = await db.select().from(schema.intentMarket);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope) {
+      const { INTENT_MARKET } = await loadDemoData();
+      return c.json(INTENT_MARKET);
+    }
+  }
   return c.json(rows);
 });
 
@@ -861,6 +916,13 @@ app.get("/api/intent-market", requireDb, async (c) => {
 
 app.get("/api/intent-categories", requireDb, async (c) => {
   const rows = await db.select().from(schema.intentCategories);
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope) {
+      const { INTENT_CATEGORIES } = await loadDemoData();
+      return c.json(INTENT_CATEGORIES);
+    }
+  }
   return c.json(rows);
 });
 
@@ -868,7 +930,18 @@ app.get("/api/intent-categories", requireDb, async (c) => {
 
 app.get("/api/sla-templates", requireDb, async (c) => {
   const rows = await db.select().from(schema.slaTemplates);
-  // Group by vertical to match frontend SLA_TEMPLATES format
+  if (rows.length === 0) {
+    const scope = await getDemoScope(c);
+    if (scope) {
+      const { SLA_TEMPLATES } = await loadDemoData();
+      const grouped = {};
+      for (const r of SLA_TEMPLATES) {
+        if (!grouped[r.vertical]) grouped[r.vertical] = [];
+        grouped[r.vertical].push(r);
+      }
+      return c.json(grouped);
+    }
+  }
   const grouped = {};
   for (const r of rows) {
     if (!grouped[r.vertical]) grouped[r.vertical] = [];
@@ -965,54 +1038,39 @@ const port = parseInt(process.env.PORT || "3001", 10);
 
 const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
-// ─── ENSURE BUILDER DEMO ACCOUNT + DEMO DATA ───
-// Auto-provision builder@demo.com and seed mock data on startup if DB is empty.
+// ─── ENSURE DEMO ACCOUNTS ───
+// Auto-provision demo accounts on startup.
+// builder@demo.com — full mock data fallback (all tabs)
+// live@demo.com — market data fallback only (signals, intent market, categories, metrics)
 // SMB accounts are derived from the natural demand experience — no demo needed.
 
-async function ensureBuilderDemo() {
+const DEMO_ACCOUNTS = [
+  { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
+  { name: "Live Demo", email: "live@demo.com", password: "password123", role: "builder" },
+];
+
+async function ensureDemoAccounts() {
   if (!auth?.api?.signUpEmail || !isDbAvailable()) return;
-  try {
-    const res = await auth.api.signInEmail({
-      body: { email: "builder@demo.com", password: "password123" },
-    });
-    if (res) return;
-  } catch {
+  for (const acct of DEMO_ACCOUNTS) {
     try {
-      await auth.api.signUpEmail({
-        body: { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
-      });
-      log.info("Auto-provisioned builder@demo.com demo account");
-    } catch (err) {
-      if (!err.message?.includes("already")) {
-        log.warn(`Failed to provision builder demo account: ${err.message}`);
+      await auth.api.signInEmail({ body: { email: acct.email, password: acct.password } });
+    } catch {
+      try {
+        await auth.api.signUpEmail({ body: acct });
+        log.info(`Auto-provisioned ${acct.email} demo account`);
+      } catch (err) {
+        if (!err.message?.includes("already")) {
+          log.warn(`Failed to provision ${acct.email}: ${err.message}`);
+        }
       }
     }
-  }
-}
-
-async function ensureDemoData() {
-  if (!isDbAvailable()) return;
-  try {
-    // Check if agents table has data — if so, skip seeding
-    const [{ value: agentCount }] = await db.select({ value: count() }).from(schema.agents);
-    if (agentCount > 0) return;
-
-    log.info("Empty database detected — seeding demo market data...");
-
-    // Dynamically import seed data to avoid bloating the server module
-    const { seedDemoData } = await import("./db/seedData.js");
-    await seedDemoData(db, schema);
-    log.info("Demo market data seeded successfully");
-  } catch (err) {
-    log.warn(`Failed to seed demo data: ${err.message}`);
   }
 }
 
 const server = serve({ fetch: app.fetch, port, hostname }, async () => {
   console.log(`Hono API server running on http://${hostname}:${port}`);
   console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
-  await ensureBuilderDemo();
-  await ensureDemoData();
+  await ensureDemoAccounts();
 });
 
 // ─── GRACEFUL SHUTDOWN ───
