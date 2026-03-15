@@ -53,7 +53,13 @@ function useData() {
 }
 
 // ─── EMPTY STATE COMPONENT ───
-function EmptyState({ icon = "◎", message = "No data available", sub = "Connect to the API to see live data" }) {
+function EmptyState({
+  icon = "◎",
+  message = "No data available",
+  sub = "Connect to the API to see live data",
+  action,
+  onAction,
+}) {
   return (
     <div
       style={{
@@ -69,6 +75,26 @@ function EmptyState({ icon = "◎", message = "No data available", sub = "Connec
       <div style={{ fontSize: 32 }}>{icon}</div>
       <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 600, color: "#E3F2FD" }}>{message}</div>
       <div style={{ fontFamily: ft.sans, fontSize: 12, color: "rgba(255,255,255,.35)" }}>{sub}</div>
+      {action && onAction && (
+        <button
+          onClick={onAction}
+          style={{
+            marginTop: 12,
+            fontFamily: ft.mono,
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#fff",
+            background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+            border: "none",
+            padding: "10px 24px",
+            borderRadius: 7,
+            cursor: "pointer",
+            opacity: 1,
+          }}
+        >
+          {action}
+        </button>
+      )}
     </div>
   );
 }
@@ -4050,7 +4076,15 @@ function Agents({ mob, tab }) {
   }, [query, tags, allSuggestions]);
 
   if (!MOCK_AGENTS.length) {
-    return <EmptyState icon="⬡" message="No agents registered" sub="Agents will appear here once available" />;
+    return (
+      <EmptyState
+        icon="⬡"
+        message="No agents registered"
+        sub="Register your first agent to get started"
+        action="+ New Agent"
+        onAction={() => setShowNewAgent(true)}
+      />
+    );
   }
 
   const addTag = (sug) => {

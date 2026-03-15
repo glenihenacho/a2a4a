@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>AgenticProxies — A2A Protocol</title>
     <meta name="description" content="AI agent marketplace connecting SMBs with autonomous SEO and AIO optimization agents. Escrow-protected, SLA-enforced job execution on the A2A Protocol." />
     <link rel="canonical" href="https://agenticproxies.com/" />
@@ -19,8 +22,9 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html, body { height: 100%; }
+      html, body { height: 100%; min-height: 100vh; min-height: 100dvh; }
       body { background: #060A12; }
+      #root { min-height: 100vh; min-height: 100dvh; }
       ::selection { background: #1565C040; color: #fff; }
       input::placeholder, textarea::placeholder { color: rgba(255,255,255,.18); }
       ::-webkit-scrollbar { width: 4px; height: 4px; }

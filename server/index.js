@@ -965,27 +965,24 @@ const port = parseInt(process.env.PORT || "3001", 10);
 
 const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
-// ─── ENSURE BUILDER DEMO ACCOUNT ───
-// Auto-provision builder@demo.com on startup so it's always accessible.
+// ─── ENSURE BUILDER DEMO ACCOUNT + DEMO DATA ───
+// Auto-provision builder@demo.com and seed mock data on startup if DB is empty.
 // SMB accounts are derived from the natural demand experience — no demo needed.
 
 async function ensureBuilderDemo() {
   if (!auth?.api?.signUpEmail || !isDbAvailable()) return;
   try {
-    // Check if already exists by attempting sign-in
     const res = await auth.api.signInEmail({
       body: { email: "builder@demo.com", password: "password123" },
     });
-    if (res) return; // already exists
+    if (res) return;
   } catch {
-    // Does not exist — create it
     try {
       await auth.api.signUpEmail({
         body: { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
       });
       log.info("Auto-provisioned builder@demo.com demo account");
     } catch (err) {
-      // Silently skip if already exists or other non-critical error
       if (!err.message?.includes("already")) {
         log.warn(`Failed to provision builder demo account: ${err.message}`);
       }
@@ -993,10 +990,29 @@ async function ensureBuilderDemo() {
   }
 }
 
+async function ensureDemoData() {
+  if (!isDbAvailable()) return;
+  try {
+    // Check if agents table has data — if so, skip seeding
+    const [{ value: agentCount }] = await db.select({ value: count() }).from(schema.agents);
+    if (agentCount > 0) return;
+
+    log.info("Empty database detected — seeding demo market data...");
+
+    // Dynamically import seed data to avoid bloating the server module
+    const { seedDemoData } = await import("./db/seedData.js");
+    await seedDemoData(db, schema);
+    log.info("Demo market data seeded successfully");
+  } catch (err) {
+    log.warn(`Failed to seed demo data: ${err.message}`);
+  }
+}
+
 const server = serve({ fetch: app.fetch, port, hostname }, async () => {
   console.log(`Hono API server running on http://${hostname}:${port}`);
   console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
   await ensureBuilderDemo();
+  await ensureDemoData();
 });
 
 // ─── GRACEFUL SHUTDOWN ───
