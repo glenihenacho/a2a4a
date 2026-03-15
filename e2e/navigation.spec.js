@@ -13,9 +13,9 @@ test.describe("Route navigation", () => {
 
   test.describe("authenticated routes", () => {
     test.beforeEach(async ({ page }) => {
-      // Log in as demo SMB user before each dashboard test
+      // Log in as demo builder user before each dashboard test
       await page.goto("/auth");
-      await page.fill('input[type="email"]', "smb@demo.com");
+      await page.fill('input[type="email"]', "builder@demo.com");
       await page.fill('input[type="password"]', "password123");
       await page.click('button[type="submit"]');
       // Wait for redirect to dashboard after login
