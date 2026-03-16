@@ -4,6 +4,9 @@ const baseURL = typeof window !== "undefined" ? `${window.location.origin}/api/a
 
 export const authClient = createAuthClient({
   baseURL,
+  fetchOptions: {
+    credentials: "include",
+  },
 });
 
 export const { useSession, signIn, signUp, signOut } = authClient;
