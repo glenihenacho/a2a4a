@@ -267,8 +267,9 @@ async function getSession(c) {
 }
 
 // ─── DEMO FALLBACK SCOPE ───
-// Returns 'full' for builder@demo.com, null otherwise.
-// Used by GET routes to return mock data when DB tables are empty.
+// Returns 'full' for builder@demo.com (all mock data), 'market' for live@demo.com
+// (intent market only), null otherwise.
+// Routes check scope === "full" for complete mock data; intent-market checks any truthy scope.
 
 let _demoData = null;
 async function loadDemoData() {
@@ -283,6 +284,7 @@ async function getDemoScope(c) {
   if (!session) return null;
   const email = session.user?.email;
   if (email === "builder@demo.com") return "full";
+  if (email === "live@demo.com") return "market";
   return null;
 }
 
