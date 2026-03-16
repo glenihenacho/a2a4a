@@ -330,9 +330,7 @@ const VERTICAL_SPLIT = { seo: 55, aio: 45 };
 
 const TRENDING_UP = [
   { query: "AI writing tool buried by competitor overviews", delta: "+273%", vol: "112K" },
-  { query: "energy company wants AI overview citations", delta: "+143%", vol: "97K" },
   { query: "SaaS startup needs to rank for CRM searches", delta: "+98%", vol: "89K" },
-  { query: "my skincare brand doesn't show in AI answers", delta: "+139%", vol: "74K" },
   { query: "solar installer needs AI overview placement", delta: "+136%", vol: "52K" },
 ];
 
