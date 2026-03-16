@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
 import { useMedia, useApiData } from "../shared/hooks";
+import { useSession, signOut } from "../shared/auth";
 import { Badge, VBadge, Card, ScrollX, Sparkline, BarChart, DonutChart } from "../shared/primitives";
 import {
   fetchAgents,
@@ -5685,11 +5687,240 @@ function Escrow({ mob }) {
   );
 }
 
+// ─── ACCOUNT SETTINGS ───
+function AccountSettings({ mob, session, onSignOut }) {
+  const user = session?.user;
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div style={{ fontFamily: ft.display, fontSize: mob ? 20 : 24, fontWeight: 700, marginBottom: 24 }}>
+        Account Settings
+      </div>
+      <Card>
+        <div style={{ padding: mob ? 16 : 20 }}>
+          <div
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: blue,
+              marginBottom: 14,
+            }}
+          >
+            Profile
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)", marginBottom: 4 }}>
+                Name
+              </div>
+              <div style={{ fontFamily: ft.sans, fontSize: 14, color: "#E3F2FD" }}>
+                {user?.name || user?.email?.split("@")[0] || "—"}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)", marginBottom: 4 }}>
+                Email
+              </div>
+              <div style={{ fontFamily: ft.sans, fontSize: 14, color: "#E3F2FD" }}>{user?.email || "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)", marginBottom: 4 }}>
+                Role
+              </div>
+              <div
+                style={{
+                  display: "inline-block",
+                  fontFamily: ft.mono,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  color: user?.role === "builder" ? blue : "#66BB6A",
+                  background: user?.role === "builder" ? "rgba(66,165,245,.08)" : "rgba(102,187,106,.08)",
+                  padding: "3px 10px",
+                  borderRadius: 100,
+                }}
+              >
+                {user?.role || "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+      <div style={{ marginTop: 20 }}>
+        <Card>
+          <div style={{ padding: mob ? 16 : 20 }}>
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: ".08em",
+                textTransform: "uppercase",
+                color: "#EF5350",
+                marginBottom: 14,
+              }}
+            >
+              Danger Zone
+            </div>
+            <button
+              onClick={onSignOut}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(239,83,80,.12)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(239,83,80,.06)";
+              }}
+              style={{
+                fontFamily: ft.sans,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#EF5350",
+                background: "rgba(239,83,80,.06)",
+                border: "1px solid rgba(239,83,80,.15)",
+                borderRadius: 8,
+                padding: "8px 18px",
+                cursor: "pointer",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─── USER MENU DROPDOWN ───
+function UserMenu({ open, onClose, onNavigate, userName, userEmail, userRole, anchor = "below" }) {
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const items = [
+    { label: "Account Settings", icon: "⚙", action: "settings" },
+    { label: "Sign Out", icon: "↗", action: "logout" },
+  ];
+
+  const posStyle =
+    anchor === "above"
+      ? { position: "absolute", left: 0, right: 0, bottom: "calc(100% + 6px)" }
+      : { position: "absolute", right: 0, top: "calc(100% + 6px)" };
+
+  return (
+    <div
+      ref={menuRef}
+      style={{
+        ...posStyle,
+        width: anchor === "above" ? "auto" : 220,
+        background: "rgba(12,18,30,.98)",
+        border: "1px solid rgba(66,165,245,.12)",
+        borderRadius: 12,
+        padding: "6px 0",
+        zIndex: 1000,
+        backdropFilter: "blur(20px)",
+        WebkitBackdropFilter: "blur(20px)",
+        boxShadow: "0 8px 32px rgba(0,0,0,.5)",
+      }}
+    >
+      <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,.05)" }}>
+        <div style={{ fontFamily: ft.sans, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.7)" }}>
+          {userName || "User"}
+        </div>
+        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 2 }}>
+          {userEmail || ""}
+        </div>
+        {userRole && (
+          <div
+            style={{
+              display: "inline-block",
+              marginTop: 6,
+              fontFamily: ft.mono,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: userRole === "builder" ? blue : "#66BB6A",
+              background: userRole === "builder" ? "rgba(66,165,245,.08)" : "rgba(102,187,106,.08)",
+              padding: "2px 8px",
+              borderRadius: 100,
+            }}
+          >
+            {userRole}
+          </div>
+        )}
+      </div>
+      {items.map((item) => (
+        <button
+          key={item.action}
+          onClick={() => onNavigate(item.action)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(66,165,245,.06)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            width: "100%",
+            padding: "9px 14px",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: ft.sans,
+            fontSize: 12,
+            fontWeight: 500,
+            color: item.action === "logout" ? "#EF5350" : "rgba(255,255,255,.5)",
+            textAlign: "left",
+          }}
+        >
+          <span style={{ fontSize: 13, width: 18, textAlign: "center" }}>{item.icon}</span>
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── APP SHELL ───
 export default function MarketplaceApp() {
   const { mob, tab } = useMedia();
+  const navigate = useNavigate();
+  const { data: session } = useSession();
   const [page, setPage] = useState("dashboard");
   const [, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const userName = session?.user?.name || session?.user?.email?.split("@")[0] || "Operator";
+  const userEmail = session?.user?.email || "";
+  const userRole = session?.user?.role || null;
+
+  const handleUserMenuAction = useCallback(
+    async (action) => {
+      setUserMenuOpen(false);
+      if (action === "logout") {
+        await signOut();
+        navigate("/auth");
+      } else if (action === "settings") {
+        setPage("settings");
+      }
+    },
+    [navigate],
+  );
 
   // ─── API data fetching (no mock fallbacks) ───
   const { data: apiAgents, loading: loadingAgents } = useApiData(fetchAgents);
@@ -5760,12 +5991,18 @@ export default function MarketplaceApp() {
     setMenuOpen(false);
   }, []);
 
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    navigate("/auth");
+  }, [navigate]);
+
   const pages = {
     dashboard: <Dashboard mob={mob} tab={tab} />,
     intents: <Intents mob={mob} tab={tab} />,
     agents: <Agents mob={mob} tab={tab} />,
     auctions: <Live mob={mob} tab={tab} />,
     escrow: <Escrow mob={mob} />,
+    settings: <AccountSettings mob={mob} session={session} onSignOut={handleSignOut} />,
   };
 
   return (
@@ -5825,30 +6062,41 @@ export default function MarketplaceApp() {
                 MVP
               </Badge>
             </div>
-            <button
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: "rgba(255,255,255,.03)",
-                border: "1px solid rgba(255,255,255,.06)",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
-                <path
-                  d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
-                  stroke="rgba(255,255,255,.35)"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setUserMenuOpen((v) => !v)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: userMenuOpen ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.03)",
+                  border: `1px solid ${userMenuOpen ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.06)"}`,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="4" stroke={userMenuOpen ? blue : "rgba(255,255,255,.35)"} strokeWidth="2" />
+                  <path
+                    d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
+                    stroke={userMenuOpen ? blue : "rgba(255,255,255,.35)"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+              <UserMenu
+                open={userMenuOpen}
+                onClose={() => setUserMenuOpen(false)}
+                onNavigate={handleUserMenuAction}
+                userName={userName}
+                userEmail={userEmail}
+                userRole={userRole}
+              />
+            </div>
           </div>
         )}
 
@@ -5983,6 +6231,7 @@ export default function MarketplaceApp() {
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
+                position: "relative",
               }}
             >
               <div
@@ -6020,18 +6269,32 @@ export default function MarketplaceApp() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Operator
+                  {userName}
                 </div>
-                <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>
-                  admin@agenticproxies.com
-                </div>
+                <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>{userEmail}</div>
               </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, cursor: "pointer" }}>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{ flexShrink: 0, cursor: "pointer" }}
+                onClick={() => setUserMenuOpen((v) => !v)}
+              >
                 <path
                   d="M12 13a1 1 0 100-2 1 1 0 000 2zm0-5a1 1 0 100-2 1 1 0 000 2zm0 10a1 1 0 100-2 1 1 0 000 2z"
                   fill="rgba(255,255,255,.2)"
                 />
               </svg>
+              <UserMenu
+                open={userMenuOpen}
+                onClose={() => setUserMenuOpen(false)}
+                onNavigate={handleUserMenuAction}
+                userName={userName}
+                userEmail={userEmail}
+                userRole={userRole}
+                anchor="above"
+              />
             </div>
           </div>
         )}
@@ -6051,7 +6314,7 @@ export default function MarketplaceApp() {
               }}
             >
               <span style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>
-                {navItems.find((n) => n.key === page)?.label || page}
+                {navItems.find((n) => n.key === page)?.label || (page === "settings" ? "Account Settings" : page)}
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.18)" }}>
@@ -6067,29 +6330,46 @@ export default function MarketplaceApp() {
                   }}
                 />
                 <div style={{ width: 1, height: 18, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
-                <button
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 7,
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.06)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="8" r="4" stroke="rgba(255,255,255,.35)" strokeWidth="2" />
-                    <path
-                      d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
-                      stroke="rgba(255,255,255,.35)"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setUserMenuOpen((v) => !v)}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 7,
+                      background: userMenuOpen ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.03)",
+                      border: `1px solid ${userMenuOpen ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.06)"}`,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <circle
+                        cx="12"
+                        cy="8"
+                        r="4"
+                        stroke={userMenuOpen ? blue : "rgba(255,255,255,.35)"}
+                        strokeWidth="2"
+                      />
+                      <path
+                        d="M4 21c0-3.3 3.6-6 8-6s8 2.7 8 6"
+                        stroke={userMenuOpen ? blue : "rgba(255,255,255,.35)"}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  </button>
+                  <UserMenu
+                    open={userMenuOpen}
+                    onClose={() => setUserMenuOpen(false)}
+                    onNavigate={handleUserMenuAction}
+                    userName={userName}
+                    userEmail={userEmail}
+                    userRole={userRole}
+                  />
+                </div>
               </div>
             </div>
           )}
