@@ -29,20 +29,12 @@ function RequireAuth({ children }) {
   return children;
 }
 
-function RootRedirect() {
-  const { data: session, isPending } = useSession();
-  if (isPending) return <Loading />;
-  if (!session?.user) return <Navigate to="/auth" replace />;
-  const dest = session.user.role === "smb" ? "/demand" : "/dashboard";
-  return <Navigate to={dest} replace />;
-}
-
 export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: bg, color: "#E3F2FD", fontFamily: ft.sans }}>
       <Suspense fallback={<Loading />}>
         <Routes>
-          <Route path="/" element={<RootRedirect />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"

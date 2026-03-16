@@ -114,19 +114,16 @@ function Dashboard({ mob, tab }) {
   const [txnFilter, setTxnFilter] = useState("all");
   const [perfVert, setPerfVert] = useState("all");
 
-  if (!TRANSACTIONS.length && !REVENUE_MONTHS.length) {
-    return <EmptyState icon="◎" message="No dashboard data" sub="API data will appear here once connected" />;
-  }
-
   const filteredTxns = txnFilter === "all" ? TRANSACTIONS : TRANSACTIONS.filter((t) => t.type === txnFilter);
   const totalRevenue = REVENUE_MONTHS.reduce((s, m) => s + m.total, 0);
-  const thisMonth = REVENUE_MONTHS[REVENUE_MONTHS.length - 1] || { total: 0 };
-  const lastMonth = REVENUE_MONTHS[REVENUE_MONTHS.length - 2] || { total: 1 };
+  const thisMonth = REVENUE_MONTHS[REVENUE_MONTHS.length - 1] || { total: 0, clearing: 0 };
+  const lastMonth = REVENUE_MONTHS[REVENUE_MONTHS.length - 2] || { total: 0 };
   const revenueGrowth = lastMonth.total ? Math.round(((thisMonth.total - lastMonth.total) / lastMonth.total) * 100) : 0;
   const totalEscrow = TRANSACTIONS.filter((t) => t.status === "pending").reduce((s, t) => s + Math.abs(t.amount), 0);
   const settledCount = TRANSACTIONS.filter((t) => t.status === "settled").length;
   const platformFees = Math.round(totalRevenue * 0.12);
   const txnColors = { clearing: blue, milestone: "#64B5F6", refund: "#EF5350" };
+  const perfAll = PERF_METRICS.all || {};
 
   const kpis = [
     {
@@ -139,7 +136,7 @@ function Dashboard({ mob, tab }) {
     {
       label: "This Month",
       value: `$${(thisMonth.total / 1000).toFixed(1)}k`,
-      sub: `Clear $${(thisMonth.clearing / 1000).toFixed(1)}k`,
+      sub: `Clear $${((thisMonth.clearing || 0) / 1000).toFixed(1)}k`,
       color: "#64B5F6",
       spark: REVENUE_MONTHS.map((m) => m.clearing),
     },
@@ -159,8 +156,8 @@ function Dashboard({ mob, tab }) {
     { label: "Settled TXNs", value: settledCount, sub: `of ${TRANSACTIONS.length} total`, color: "#66BB6A" },
     {
       label: "Avg Bid/Demand",
-      value: PERF_METRICS.all.avgBidsPerIntent,
-      sub: `${PERF_METRICS.all.engagementRate}% engage`,
+      value: perfAll.avgBidsPerIntent || 0,
+      sub: `${perfAll.engagementRate || 0}% engage`,
       color: "#AB47BC",
     },
   ];
@@ -313,8 +310,8 @@ function Dashboard({ mob, tab }) {
             <div style={{ position: "relative", flexShrink: 0 }}>
               <DonutChart
                 segments={[
-                  { value: VERTICAL_SPLIT.seo, color: blue },
-                  { value: VERTICAL_SPLIT.aio, color: "#90CAF9" },
+                  { value: VERTICAL_SPLIT.seo || 0, color: blue },
+                  { value: VERTICAL_SPLIT.aio || 0, color: "#90CAF9" },
                 ]}
                 size={mob ? 90 : 110}
               />
@@ -343,8 +340,8 @@ function Dashboard({ mob, tab }) {
             </div>
             <div style={{ marginTop: mob ? 0 : 14, flex: 1, width: "100%" }}>
               {[
-                { label: "SEO", pct: VERTICAL_SPLIT.seo, color: blue },
-                { label: "AIO", pct: VERTICAL_SPLIT.aio, color: "#90CAF9" },
+                { label: "SEO", pct: VERTICAL_SPLIT.seo || 0, color: blue },
+                { label: "AIO", pct: VERTICAL_SPLIT.aio || 0, color: "#90CAF9" },
               ].map((s) => (
                 <div
                   key={s.label}
@@ -388,17 +385,28 @@ function Dashboard({ mob, tab }) {
             </div>
           </div>
           {(() => {
-            const pm = PERF_METRICS[perfVert];
+            const pm = PERF_METRICS[perfVert] || {};
             return [
               {
                 label: "Milestone Success",
-                value: `${pm.milestoneSuccess}%`,
-                bar: pm.milestoneSuccess,
+                value: `${pm.milestoneSuccess || 0}%`,
+                bar: pm.milestoneSuccess || 0,
                 color: "#66BB6A",
               },
-              { label: "Client Retention", value: `${pm.clientRetention}%`, bar: pm.clientRetention, color: "#AB47BC" },
-              { label: "Dispute Rate", value: `${pm.disputeRate}%`, bar: pm.disputeRate, color: "#EF5350", inv: true },
-              { label: "Avg Engage Time", value: pm.avgTimeToEngage, color: "#FFA726" },
+              {
+                label: "Client Retention",
+                value: `${pm.clientRetention || 0}%`,
+                bar: pm.clientRetention || 0,
+                color: "#AB47BC",
+              },
+              {
+                label: "Dispute Rate",
+                value: `${pm.disputeRate || 0}%`,
+                bar: pm.disputeRate || 0,
+                color: "#EF5350",
+                inv: true,
+              },
+              { label: "Avg Engage Time", value: pm.avgTimeToEngage || "0h", color: "#FFA726" },
             ];
           })().map((m, i) => (
             <div key={i} style={{ marginBottom: 10 }}>
@@ -695,10 +703,6 @@ function Intents({ mob, tab }) {
       .slice(0, 6);
   }, [industryQuery, industryTags, INTENT_CATEGORIES]);
 
-  if (!INTENT_MARKET.length) {
-    return <EmptyState icon="◉" message="No market data" sub="Intent market data will appear here" />;
-  }
-
   const addIndustry = (cat) => {
     if (!industryTags.some((t) => t.name === cat.name)) setIndustryTags((p) => [...p, cat]);
     setIndustryQuery("");
@@ -728,8 +732,12 @@ function Intents({ mob, tab }) {
     return 0;
   });
 
-  const avgAio = Math.round(INTENT_MARKET.reduce((s, i) => s + i.aioRate, 0) / INTENT_MARKET.length);
-  const avgCtrDrop = Math.round(INTENT_MARKET.reduce((s, i) => s + i.ctrDelta, 0) / INTENT_MARKET.length);
+  const avgAio = INTENT_MARKET.length
+    ? Math.round(INTENT_MARKET.reduce((s, i) => s + i.aioRate, 0) / INTENT_MARKET.length)
+    : 0;
+  const avgCtrDrop = INTENT_MARKET.length
+    ? Math.round(INTENT_MARKET.reduce((s, i) => s + i.ctrDelta, 0) / INTENT_MARKET.length)
+    : 0;
   const totalVol = INTENT_MARKET.reduce((s, i) => s + i.vol, 0);
   const highOpp = INTENT_MARKET.filter((i) => i.opportunity >= 80).length;
 
@@ -4077,18 +4085,6 @@ function Agents({ mob, tab }) {
       .slice(0, 6);
   }, [query, tags, allSuggestions]);
 
-  if (!MOCK_AGENTS.length) {
-    return (
-      <EmptyState
-        icon="⬡"
-        message="No agents registered"
-        sub="Register your first agent to get started"
-        action="+ New Agent"
-        onAction={() => setShowNewAgent(true)}
-      />
-    );
-  }
-
   const addTag = (sug) => {
     if (!tags.some((t) => t.label === sug.label && t.type === sug.type)) setTags((p) => [...p, sug]);
     setQuery("");
@@ -4735,10 +4731,6 @@ function Live({ mob, tab }) {
     return () => clearInterval(t);
   }, []);
 
-  if (!LIVE_SIGNALS.length) {
-    return <EmptyState icon="⚡" message="No live signals" sub="Auction signals will appear here when active" />;
-  }
-
   const filtered = statusFilter === "all" ? LIVE_SIGNALS : LIVE_SIGNALS.filter((s) => s.status === statusFilter);
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "signal") return b.signal - a.signal;
@@ -4752,9 +4744,13 @@ function Live({ mob, tab }) {
   const totalSpend = LIVE_SIGNALS.reduce((s, sig) => s + sig.avgSpend, 0);
   const totalImpressions = LIVE_SIGNALS.reduce((s, sig) => s + sig.impressions, 0);
   const liveCount = LIVE_SIGNALS.filter((s) => s.status === "live").length;
-  const avgAgents = (LIVE_SIGNALS.reduce((s, sig) => s + sig.agents, 0) / LIVE_SIGNALS.length).toFixed(1);
+  const avgAgents = LIVE_SIGNALS.length
+    ? (LIVE_SIGNALS.reduce((s, sig) => s + sig.agents, 0) / LIVE_SIGNALS.length).toFixed(1)
+    : "0.0";
   const aioVisible = LIVE_SIGNALS.filter((s) => s.aioVisible).length;
-  const avgCtr = (LIVE_SIGNALS.reduce((s, sig) => s + sig.ctr, 0) / LIVE_SIGNALS.length).toFixed(1);
+  const avgCtr = LIVE_SIGNALS.length
+    ? (LIVE_SIGNALS.reduce((s, sig) => s + sig.ctr, 0) / LIVE_SIGNALS.length).toFixed(1)
+    : "0.0";
 
   const statusColors = { live: "#66BB6A", warming: "#FFA726", cooling: "#78909C" };
   const aioPosColors = { featured: "#42A5F5", cited: "#64B5F6", mentioned: "#90CAF9", none: "rgba(255,255,255,.15)" };
@@ -4778,7 +4774,7 @@ function Live({ mob, tab }) {
     {
       label: "AIO Visible",
       value: `${aioVisible}/${LIVE_SIGNALS.length}`,
-      sub: `${Math.round((aioVisible / LIVE_SIGNALS.length) * 100)}% coverage`,
+      sub: `${LIVE_SIGNALS.length ? Math.round((aioVisible / LIVE_SIGNALS.length) * 100) : 0}% coverage`,
       color: "#90CAF9",
     },
     { label: "Avg Agents", value: avgAgents, sub: "per demand signal", color: "#FFA726" },

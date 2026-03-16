@@ -13,10 +13,9 @@ export default function Auth() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Already logged in — route by role
+  // Already logged in — redirect to dashboard
   if (!isPending && session?.user) {
-    const dest = session.user.role === "smb" ? "/demand" : "/dashboard";
-    return <Navigate to={dest} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   async function handleSubmit(e) {
@@ -25,9 +24,8 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      let userData = null;
       if (mode === "register") {
-        const { data, error: err } = await authClient.signUp.email({
+        const { error: err } = await authClient.signUp.email({
           name,
           email,
           password,
@@ -38,9 +36,8 @@ export default function Auth() {
           setLoading(false);
           return;
         }
-        userData = data?.user;
       } else {
-        const { data, error: err } = await authClient.signIn.email({
+        const { error: err } = await authClient.signIn.email({
           email,
           password,
         });
@@ -49,11 +46,9 @@ export default function Auth() {
           setLoading(false);
           return;
         }
-        userData = data?.user;
       }
-      // Role-based redirect — SMBs go to Demand Agent, builders to Dashboard
-      const dest = userData?.role === "smb" ? "/demand" : "/dashboard";
-      window.location.href = dest;
+      // Hard redirect to ensure session cookie is picked up fresh
+      window.location.href = "/dashboard";
     } catch (err) {
       setError(err.message || "Something went wrong");
     } finally {
