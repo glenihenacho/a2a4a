@@ -895,6 +895,10 @@ app.get("/api/metrics", requireDb, async (c) => {
       const { REVENUE_MONTHS } = await loadDemoData();
       return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
     }
+    if (scope === "market") {
+      // live@demo.com gets empty metrics — no mock dashboard data
+      return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
+    }
   }
   return c.json({ revenue, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
 });
