@@ -267,8 +267,9 @@ async function getSession(c) {
 }
 
 // ─── DEMO FALLBACK SCOPE ───
-// Returns 'full' for builder@demo.com, null otherwise.
-// Used by GET routes to return mock data when DB tables are empty.
+// Returns 'full' for builder@demo.com (all mock data), 'market' for live@demo.com
+// (intent market only), null otherwise.
+// Routes check scope === "full" for complete mock data; intent-market checks any truthy scope.
 
 let _demoData = null;
 async function loadDemoData() {
@@ -283,6 +284,7 @@ async function getDemoScope(c) {
   if (!session) return null;
   const email = session.user?.email;
   if (email === "builder@demo.com") return "full";
+  if (email === "live@demo.com") return "market";
   return null;
 }
 
@@ -892,6 +894,10 @@ app.get("/api/metrics", requireDb, async (c) => {
     if (scope === "full") {
       const { REVENUE_MONTHS } = await loadDemoData();
       return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+    }
+    if (scope === "market") {
+      // live@demo.com gets empty metrics — no mock dashboard data
+      return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
     }
   }
   return c.json({ revenue, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
