@@ -51,15 +51,27 @@ jobs:
       - name: Run database migrations
         run: |
           echo "Running database migrations..."
-          flyctl ssh console -C "sh -c 'cd /app && npx drizzle-kit migrate'"
+          flyctl ssh console -C "sh -c 'cd /app && npx drizzle-kit migrate'" || {
+            echo "Migration command failed (exit $?) — retrying once..."
+            sleep 5
+            flyctl ssh console -C "sh -c 'cd /app && npx drizzle-kit migrate'"
+          }
           echo "Migrations completed successfully"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Restart app after migrations
+        run: |
+          echo "Restarting app to pick up DB connection..."
+          flyctl apps restart agenticproxies
+          sleep 5
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Verify app health post-migration
         run: |
           echo "Verifying DB connection after migrations..."
-          for i in $(seq 1 6); do
+          for i in $(seq 1 15); do
             BODY=$(curl -s https://agenticproxies.com/api/health || echo "")
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://agenticproxies.com/api/health || echo "000")
             if [ "$STATUS" = "200" ]; then
