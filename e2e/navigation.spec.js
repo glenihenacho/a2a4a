@@ -23,29 +23,34 @@ test.describe("Route navigation", () => {
     });
 
     test("/dashboard renders marketplace with tabs", async ({ page }) => {
-      // Sidebar nav icons for 5 tabs
-      await expect(page.locator("text=◎")).toBeVisible();
-      await expect(page.locator("text=◉")).toBeVisible();
-      await expect(page.locator("text=⚡")).toBeVisible();
-      await expect(page.locator("text=⬡")).toBeVisible();
-      await expect(page.locator("text=◈")).toBeVisible();
+      // Wait for the Dashboard component to fully render (sidebar brand text)
+      await expect(page.locator("text=agenticproxies").first()).toBeVisible({ timeout: 15000 });
+      // Sidebar nav labels for 5 tabs
+      await expect(page.locator("button", { hasText: "Dashboard" }).first()).toBeVisible();
+      await expect(page.locator("button", { hasText: "Market" })).toBeVisible();
+      await expect(page.locator("button", { hasText: "Live" })).toBeVisible();
+      await expect(page.locator("button", { hasText: "Registry" })).toBeVisible();
+      await expect(page.locator("button", { hasText: "Escrow" })).toBeVisible();
     });
 
     test("dashboard tab switching works", async ({ page }) => {
+      // Wait for sidebar to render
+      await expect(page.locator("text=agenticproxies").first()).toBeVisible({ timeout: 15000 });
+
       // Click Market tab
-      await page.locator("text=◉").click();
+      await page.locator("button", { hasText: "Market" }).click();
       await expect(page.locator("text=Intent Market")).toBeVisible();
 
       // Click Live tab
-      await page.locator("text=⚡").click();
+      await page.locator("button", { hasText: "Live" }).click();
       await expect(page.getByRole("heading", { name: "Live" })).toBeVisible();
 
       // Click Registry tab
-      await page.locator("text=⬡").click();
+      await page.locator("button", { hasText: "Registry" }).click();
       await expect(page.locator("text=Agent Registry")).toBeVisible();
 
       // Click Escrow tab
-      await page.locator("text=◈").click();
+      await page.locator("button", { hasText: "Escrow" }).click();
       await expect(page.getByRole("heading", { name: "Escrow" })).toBeVisible();
     });
   });
