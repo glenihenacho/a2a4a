@@ -918,7 +918,7 @@ app.get("/api/intent-categories", requireDb, async (c) => {
   const rows = await db.select().from(schema.intentCategories);
   if (rows.length === 0) {
     const scope = await getDemoScope(c);
-    if (scope) {
+    if (scope === "full") {
       const { INTENT_CATEGORIES } = await loadDemoData();
       return c.json(INTENT_CATEGORIES);
     }
@@ -932,7 +932,7 @@ app.get("/api/sla-templates", requireDb, async (c) => {
   const rows = await db.select().from(schema.slaTemplates);
   if (rows.length === 0) {
     const scope = await getDemoScope(c);
-    if (scope) {
+    if (scope === "full") {
       const { SLA_TEMPLATES } = await loadDemoData();
       const grouped = {};
       for (const r of SLA_TEMPLATES) {
@@ -1041,12 +1041,12 @@ const hostname = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost"
 // ─── ENSURE DEMO ACCOUNTS ───
 // Auto-provision demo accounts on startup.
 // builder@demo.com — full mock data fallback (all tabs)
-// live@demo.com — market data fallback only (signals, intent market, categories, metrics)
+// live@demo.com — intent market fallback only (no agents, intents, signals, categories, etc.)
 // SMB accounts are derived from the natural demand experience — no demo needed.
 
 const DEMO_ACCOUNTS = [
   { name: "Demo Builder", email: "builder@demo.com", password: "password123", role: "builder" },
-  { name: "Live Demo", email: "live@demo.com", password: "password123", role: "builder" },
+  { name: "Live Demo", email: "live@demo.com", password: "password123", role: "smb" },
 ];
 
 async function ensureDemoAccounts() {
