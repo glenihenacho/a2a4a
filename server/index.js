@@ -1066,29 +1066,37 @@ async function ensureDemoAccounts() {
   }
 }
 
-const server = serve({ fetch: app.fetch, port, hostname }, async () => {
-  console.log(`Hono API server running on http://${hostname}:${port}`);
-  console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
-  await ensureDemoAccounts();
-});
-
-// ─── GRACEFUL SHUTDOWN ───
-
-async function shutdown(signal) {
-  log.info(`${signal} received — shutting down gracefully`);
-  server.close(async () => {
-    await Promise.all([flushLogs(), flushSentry()]);
-    log.info("Server closed");
-    process.exit(0);
-  });
-  // Force exit after 30s if connections don't drain
-  setTimeout(() => {
-    log.warn("Forcefully shutting down after timeout");
-    process.exit(1);
-  }, 30_000).unref();
-}
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
 export default app;
+
+// ─── START SERVER (only when run directly, not when imported by tests) ───
+
+const isDirectRun =
+  process.argv[1] &&
+  import.meta.url === `file://${process.argv[1]}`;
+
+if (isDirectRun) {
+  const server = serve({ fetch: app.fetch, port, hostname }, async () => {
+    console.log(`Hono API server running on http://${hostname}:${port}`);
+    console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
+    await ensureDemoAccounts();
+  });
+
+  // ─── GRACEFUL SHUTDOWN ───
+
+  async function shutdown(signal) {
+    log.info(`${signal} received — shutting down gracefully`);
+    server.close(async () => {
+      await Promise.all([flushLogs(), flushSentry()]);
+      log.info("Server closed");
+      process.exit(0);
+    });
+    // Force exit after 30s if connections don't drain
+    setTimeout(() => {
+      log.warn("Forcefully shutting down after timeout");
+      process.exit(1);
+    }, 30_000).unref();
+  }
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
