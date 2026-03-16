@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
-import { authClient } from "../shared/auth";
+import { authClient, useSession } from "../shared/auth";
 
 export default function Auth() {
-  const navigate = useNavigate();
+  const { data: session, isPending } = useSession();
   const [mode, setMode] = useState("login"); // login | register
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -12,6 +12,11 @@ export default function Auth() {
   const [role, setRole] = useState("smb");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Already logged in — redirect to dashboard
+  if (!isPending && session?.user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -42,7 +47,8 @@ export default function Auth() {
           return;
         }
       }
-      navigate("/dashboard");
+      // Hard redirect to ensure session cookie is picked up fresh
+      window.location.href = "/dashboard";
     } catch (err) {
       setError(err.message || "Something went wrong");
     } finally {
