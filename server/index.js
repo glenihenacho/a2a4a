@@ -499,7 +499,7 @@ app.get("/api/signals", requireDb, async (c) => {
   const rows = await db.select().from(schema.signals);
   if (rows.length === 0) {
     const scope = await getDemoScope(c);
-    if (scope) {
+    if (scope === "full") {
       const { LIVE_SIGNALS } = await loadDemoData();
       return c.json(LIVE_SIGNALS);
     }
@@ -890,7 +890,7 @@ app.get("/api/metrics", requireDb, async (c) => {
   const revenue = await db.select().from(schema.revenueMonths);
   if (revenue.length === 0) {
     const scope = await getDemoScope(c);
-    if (scope) {
+    if (scope === "full") {
       const { REVENUE_MONTHS } = await loadDemoData();
       return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
     }
