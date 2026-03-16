@@ -74,11 +74,14 @@ export function ScrollX({ children }) {
 // ─── CHARTS ───
 
 export function Sparkline({ data, width = 120, height = 36, color = blue }) {
+  if (!data || data.length === 0) {
+    return <svg width={width} height={height} style={{ display: "block" }} />;
+  }
   const max = Math.max(...data),
     min = Math.min(...data),
     range = max - min || 1;
   const pts = data
-    .map((v, i) => `${(i / (data.length - 1)) * width},${height - ((v - min) / range) * (height - 4) - 2}`)
+    .map((v, i) => `${(i / (data.length - 1 || 1)) * width},${height - ((v - min) / range) * (height - 4) - 2}`)
     .join(" ");
   const uid = `sp-${color.replace("#", "")}-${width}`;
   return (
@@ -103,7 +106,10 @@ export function Sparkline({ data, width = 120, height = 36, color = blue }) {
 }
 
 export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
-  const max = Math.max(...data.map((d) => keys.reduce((s, k) => s + d[k], 0)));
+  if (!data || data.length === 0) {
+    return <div style={{ height: mob ? 140 : height }} />;
+  }
+  const max = Math.max(...data.map((d) => keys.reduce((s, k) => s + d[k], 0))) || 1;
   const h = mob ? 140 : height;
   return (
     <div>
@@ -191,7 +197,7 @@ export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
 }
 
 export function DonutChart({ segments, size = 100 }) {
-  const total = segments.reduce((s, seg) => s + seg.value, 0);
+  const total = segments.reduce((s, seg) => s + seg.value, 0) || 1;
   const r = size * 0.36,
     cx = size / 2,
     cy = size / 2,
