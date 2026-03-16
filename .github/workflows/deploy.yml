@@ -60,8 +60,8 @@ jobs:
         run: |
           echo "Verifying DB connection after migrations..."
           for i in $(seq 1 6); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://agenticproxies.com/api/health)
-            BODY=$(curl -s https://agenticproxies.com/api/health)
+            BODY=$(curl -s https://agenticproxies.com/api/health || echo "")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://agenticproxies.com/api/health || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check passed (HTTP 200)"
               echo "$BODY"
