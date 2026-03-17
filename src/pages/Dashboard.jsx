@@ -681,6 +681,7 @@ function Intents({ mob, tab }) {
     trendingUp: TRENDING_UP,
     intents: MOCK_INTENTS,
     statusCfg: STATUS_CFG,
+    signals: LIVE_SIGNALS,
   } = useData();
   const [industryTags, setIndustryTags] = useState([]);
   const [industryQuery, setIndustryQuery] = useState("");
@@ -1771,64 +1772,142 @@ function Intents({ mob, tab }) {
           marginBottom: mob ? 10 : 20,
         }}
       >
-        {/* Trending */}
-        <Card mob={mob}>
+        {/* Trending — scrolling ticker on mobile, static list on desktop */}
+        <Card mob={mob} style={{ overflow: "hidden" }}>
           <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>
             Fastest Growing SMB Demands
           </h3>
-          {TRENDING_UP.map((t, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "8px 0",
-                borderBottom: "1px solid rgba(255,255,255,.025)",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "rgba(255,255,255,.12)",
-                  width: 18,
-                }}
-              >
-                #{i + 1}
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+          {mob ? (
+            <>
+              <style>{`
+                @keyframes tickerScroll {
+                  0% { transform: translateX(0); }
+                  100% { transform: translateX(-50%); }
+                }
+              `}</style>
+              <div style={{ overflow: "hidden", margin: "0 -14px", padding: "0 14px" }}>
                 <div
                   style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    display: "flex",
+                    gap: 10,
+                    animation: "tickerScroll 18s linear infinite",
+                    width: "max-content",
                   }}
                 >
-                  {t.query}
+                  {[...TRENDING_UP, ...TRENDING_UP].map((t, i) => {
+                    const matchedMarket = INTENT_MARKET.find((m) =>
+                      m.query.toLowerCase().includes(t.query.split(" ").slice(0, 3).join(" ").toLowerCase()),
+                    );
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => matchedMarket && setFocused(matchedMarket.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "8px 14px",
+                          background: "rgba(255,255,255,.02)",
+                          border: "1px solid rgba(66,165,245,.06)",
+                          borderRadius: 10,
+                          cursor: matchedMarket ? "pointer" : "default",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span
+                          style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.1)" }}
+                        >
+                          #{(i % TRENDING_UP.length) + 1}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            maxWidth: 200,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {t.query}
+                        </span>
+                        <span style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>
+                          {t.vol}/mo
+                        </span>
+                        <span style={{ fontFamily: ft.mono, fontSize: 11, fontWeight: 700, color: "#66BB6A" }}>
+                          {t.delta}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", flexShrink: 0 }}>
-                {t.vol}/mo
-              </div>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: "#66BB6A",
-                  flexShrink: 0,
-                  minWidth: 52,
-                  textAlign: "right",
-                }}
-              >
-                {t.delta}
-              </div>
-            </div>
-          ))}
+            </>
+          ) : (
+            TRENDING_UP.map((t, i) => {
+              const matchedMarket = INTENT_MARKET.find((m) =>
+                m.query.toLowerCase().includes(t.query.split(" ").slice(0, 3).join(" ").toLowerCase()),
+              );
+              return (
+                <div
+                  key={i}
+                  onClick={() => matchedMarket && setFocused(matchedMarket.id)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 0",
+                    borderBottom: "1px solid rgba(255,255,255,.025)",
+                    cursor: matchedMarket ? "pointer" : "default",
+                    transition: "background .15s",
+                  }}
+                  onMouseEnter={(e) => matchedMarket && (e.currentTarget.style.background = "rgba(66,165,245,.03)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <span
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,.12)",
+                      width: 18,
+                    }}
+                  >
+                    #{i + 1}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t.query}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", flexShrink: 0 }}>
+                    {t.vol}/mo
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#66BB6A",
+                      flexShrink: 0,
+                      minWidth: 52,
+                      textAlign: "right",
+                    }}
+                  >
+                    {t.delta}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </Card>
 
         {/* Industry filter */}
@@ -2430,7 +2509,7 @@ function Intents({ mob, tab }) {
         </Card>
       )}
 
-      {/* MAGNIFIED TREND CHART */}
+      {/* FOCUSED DEMAND — Supply & Demand Popularity + Budget + Related */}
       {focused &&
         (() => {
           const intent = INTENT_MARKET.find((i) => i.id === focused) || null;
@@ -2439,125 +2518,498 @@ function Intents({ mob, tab }) {
           const max = Math.max(...d);
           const min = Math.min(...d);
           const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-          const chartH = mob ? 120 : 160;
+          const chartH = mob ? 140 : 180;
           const chartW = mob ? 280 : 520;
-          const pts = d.map((v, i) => ({
-            x: (i / (d.length - 1)) * chartW,
-            y: chartH - ((v - min) / (max - min || 1)) * (chartH - 20),
-          }));
-          const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-          const area = `${line} L${pts[pts.length - 1].x},${chartH} L${pts[0].x},${chartH} Z`;
           const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
+
+          // Supply data — derive agent count + competition from intent data
+          const supplyTrend = d.map((v, i) => Math.round((intent.competition / 100) * v * (0.6 + i * 0.06)));
+          const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
+          const chartMax = Math.max(...allVals);
+          const chartMin = Math.min(...allVals);
+          const range = chartMax - chartMin || 1;
+          const pad = { top: 16, bottom: 40, left: 40, right: 20 };
+          const plotW = chartW - pad.left - pad.right;
+          const plotH = chartH - pad.top - pad.bottom;
+
+          const demandPts = d.map((v, i) => ({
+            x: pad.left + (i / (d.length - 1)) * plotW,
+            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+          }));
+          const supplyPts = supplyTrend.map((v, i) => ({
+            x: pad.left + (i / (d.length - 1)) * plotW,
+            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+          }));
+
+          const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+          const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+          const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
+          const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
+
+          // Matching signal for agent count
+          const matchSignal = LIVE_SIGNALS?.find((s) =>
+            s.query?.toLowerCase().includes(intent.query.split(" ")[0].toLowerCase()),
+          );
+          const agentCount = matchSignal?.agents || Math.max(1, Math.round(intent.competition / 20));
+          const catColor = INTENT_CATEGORIES.find((c) => c.name === intent.category)?.color || "#78909C";
+
+          // Related SMB requests
+          const related = MOCK_INTENTS.filter((i) => i.vertical === intent.vertical);
+
           return (
-            <Card mob={mob} style={{ marginBottom: mob ? 10 : 20, position: "relative", overflow: "hidden" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  marginBottom: 12,
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>{intent.query}</div>
-                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                    <VBadge v={intent.vertical} />
-                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
-                      {intent.category}
-                    </span>
-                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)" }}>·</span>
-                    <span style={{ fontFamily: ft.mono, fontSize: 10, color: "#66BB6A" }}>
-                      {growth >= 0 ? "+" : ""}
-                      {growth}% 6mo
-                    </span>
+            <div style={{ marginBottom: mob ? 10 : 20 }}>
+              {/* Header */}
+              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12 }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    marginBottom: 10,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
+                      <VBadge v={intent.vertical} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: 2, background: catColor }} />
+                        <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)" }}>
+                          {intent.category}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: "#66BB6A",
+                          background: "rgba(102,187,106,.06)",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                        }}
+                      >
+                        +{growth}%
+                      </span>
+                    </div>
+                    <div style={{ fontSize: mob ? 14 : 16, fontWeight: 700, lineHeight: 1.3 }}>{intent.query}</div>
                   </div>
+                  <button
+                    onClick={() => setFocused(null)}
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 14,
+                      color: "rgba(255,255,255,.2)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                      flexShrink: 0,
+                      marginLeft: 8,
+                    }}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+                {/* Mini KPIs */}
+                <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(3,1fr)" : "repeat(5,1fr)", gap: 6 }}>
                   {[
                     { l: "Volume", v: `${(intent.vol / 1000).toFixed(0)}K`, c: "#E3F2FD" },
                     { l: "AIO Rate", v: `${intent.aioRate}%`, c: "#66BB6A" },
                     { l: "CTR Impact", v: `${intent.ctrDelta}%`, c: "#EF5350" },
+                    {
+                      l: "Competition",
+                      v: `${intent.competition}`,
+                      c: intent.competition >= 85 ? "#EF5350" : intent.competition >= 65 ? "#FFA726" : "#66BB6A",
+                    },
                     { l: "Opp Score", v: intent.opportunity, c: intent.opportunity >= 80 ? "#66BB6A" : "#FFA726" },
                   ].map((s, i) => (
-                    <div key={i} style={{ textAlign: "center" }}>
+                    <div
+                      key={i}
+                      style={{
+                        textAlign: "center",
+                        padding: "8px 4px",
+                        background: "rgba(255,255,255,.015)",
+                        borderRadius: 6,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 7,
+                          color: "rgba(255,255,255,.18)",
+                          textTransform: "uppercase",
+                          letterSpacing: ".06em",
+                          marginBottom: 3,
+                        }}
+                      >
+                        {s.l}
+                      </div>
+                      <div style={{ fontFamily: ft.display, fontSize: mob ? 16 : 18, fontWeight: 700, color: s.c }}>
+                        {s.v}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              {/* Supply & Demand Popularity Chart */}
+              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12, overflow: "hidden" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}
+                >
+                  <div>
+                    <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, marginBottom: 2 }}>
+                      Supply vs Demand Index
+                    </h3>
+                    <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
+                      6-month volume trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
+                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
+                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
+                  <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
+                    <defs>
+                      <linearGradient id={`demFill${intent.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={blue} stopOpacity=".15" />
+                        <stop offset="100%" stopColor={blue} stopOpacity="0" />
+                      </linearGradient>
+                      <linearGradient id={`supFill${intent.id}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
+                        <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    {/* Grid lines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                      const yy = pad.top + plotH * (1 - pct);
+                      const val = chartMin + range * pct;
+                      return (
+                        <g key={i}>
+                          <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
+                          <text
+                            x={pad.left - 4}
+                            y={yy + 3}
+                            textAnchor="end"
+                            fill="rgba(255,255,255,.12)"
+                            style={{ fontFamily: ft.mono, fontSize: 7 }}
+                          >
+                            {(val / 1000).toFixed(0)}K
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {/* Supply area + line */}
+                    <path d={supplyArea} fill={`url(#supFill${intent.id})`} />
+                    <path
+                      d={supplyLine}
+                      fill="none"
+                      stroke="#FFA726"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="6 3"
+                    />
+                    {/* Demand area + line */}
+                    <path d={demandArea} fill={`url(#demFill${intent.id})`} />
+                    <path
+                      d={demandLine}
+                      fill="none"
+                      stroke={blue}
+                      strokeWidth={2.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {/* Demand dots */}
+                    {demandPts.map((p, i) => (
+                      <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
+                    ))}
+                    {/* Supply dots */}
+                    {supplyPts.map((p, i) => (
+                      <circle
+                        key={`s${i}`}
+                        cx={p.x}
+                        cy={p.y}
+                        r={2.5}
+                        fill="#0A0F1A"
+                        stroke="#FFA726"
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                    {/* Gap highlight at last point */}
+                    {(() => {
+                      const dLast = demandPts[demandPts.length - 1];
+                      const sLast = supplyPts[supplyPts.length - 1];
+                      const gap = Math.abs(dLast.y - sLast.y);
+                      if (gap < 8) return null;
+                      const midY = (dLast.y + sLast.y) / 2;
+                      return (
+                        <>
+                          <line
+                            x1={dLast.x + 8}
+                            y1={dLast.y}
+                            x2={dLast.x + 8}
+                            y2={sLast.y}
+                            stroke="rgba(102,187,106,.3)"
+                            strokeWidth={1}
+                            strokeDasharray="2 2"
+                          />
+                          <text
+                            x={dLast.x + 14}
+                            y={midY + 3}
+                            fill="#66BB6A"
+                            style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
+                          >
+                            GAP
+                          </text>
+                        </>
+                      );
+                    })()}
+                    {/* X-axis labels */}
+                    {months.slice(0, d.length).map((m, i) => (
+                      <text
+                        key={`m${i}`}
+                        x={demandPts[i].x}
+                        y={chartH - 4}
+                        textAnchor="middle"
+                        fill="rgba(255,255,255,.15)"
+                        style={{ fontFamily: ft.mono, fontSize: 8 }}
+                      >
+                        {m}
+                      </text>
+                    ))}
+                  </svg>
+                </div>
+                {/* Gap summary */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: mob ? 8 : 16,
+                    marginTop: 12,
+                    padding: "10px 12px",
+                    background: "rgba(102,187,106,.03)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(102,187,106,.06)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 80 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 8,
+                        color: "rgba(255,255,255,.2)",
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
+                      }}
+                    >
+                      Demand Volume
+                    </div>
+                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
+                      {(intent.vol / 1000).toFixed(0)}K
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 80 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 8,
+                        color: "rgba(255,255,255,.2)",
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
+                      }}
+                    >
+                      Supply Capacity
+                    </div>
+                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
+                      {agentCount} agent{agentCount !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 80 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 8,
+                        color: "rgba(255,255,255,.2)",
+                        textTransform: "uppercase",
+                        letterSpacing: ".06em",
+                      }}
+                    >
+                      Market Gap
+                    </div>
+                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+                      {intent.competition < 75 ? "High" : intent.competition < 90 ? "Medium" : "Narrow"}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Budget & Activation */}
+              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12 }}>
+                <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                  Budget & Activation
+                </h3>
+                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.18)", marginBottom: 14 }}>
+                  Estimated weekly budget to capture this demand signal
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10 }}>
+                  {[
+                    {
+                      l: "Est. Weekly Budget",
+                      v: `$${Math.round((intent.vol / 1000) * 3.5).toLocaleString()}`,
+                      sub: "based on volume + competition",
+                      c: "#E3F2FD",
+                    },
+                    {
+                      l: "Cost per 1K Impressions",
+                      v: `$${intent.vol > 0 ? (((intent.vol / 1000) * 3.5 * 4.33) / (intent.vol / 1000)).toFixed(2) : "—"}`,
+                      sub: "monthly estimate",
+                      c: blue,
+                    },
+                    {
+                      l: "AIO Citation Potential",
+                      v: `${intent.aioCited} sources`,
+                      sub: `avg position #${intent.avgPos}`,
+                      c: "#66BB6A",
+                    },
+                    {
+                      l: "Agent Availability",
+                      v: `${agentCount} competing`,
+                      sub: `${intent.vertical} specialist${agentCount !== 1 ? "s" : ""}`,
+                      c: "#FFA726",
+                    },
+                  ].map((b, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        padding: "12px 14px",
+                        background: "rgba(255,255,255,.015)",
+                        borderRadius: 8,
+                        border: "1px solid rgba(255,255,255,.03)",
+                      }}
+                    >
                       <div
                         style={{
                           fontFamily: ft.mono,
                           fontSize: 8,
                           color: "rgba(255,255,255,.18)",
                           textTransform: "uppercase",
+                          letterSpacing: ".06em",
+                          marginBottom: 4,
                         }}
                       >
-                        {s.l}
+                        {b.l}
                       </div>
-                      <div style={{ fontFamily: ft.mono, fontSize: 14, fontWeight: 700, color: s.c }}>{s.v}</div>
+                      <div style={{ fontFamily: ft.display, fontSize: 20, fontWeight: 700, color: b.c }}>{b.v}</div>
+                      <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)", marginTop: 2 }}>
+                        {b.sub}
+                      </div>
                     </div>
                   ))}
-                  <button
-                    onClick={() => setFocused(null)}
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 12,
-                      color: "rgba(255,255,255,.2)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                    }}
-                  >
-                    ✕
-                  </button>
                 </div>
-              </div>
-              <div style={{ display: "flex", justifyContent: "center" }}>
-                <svg width={chartW} height={chartH + 24} style={{ overflow: "visible" }}>
-                  <defs>
-                    <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={blue} stopOpacity=".2" />
-                      <stop offset="100%" stopColor={blue} stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path d={area} fill="url(#trendFill)" />
-                  <path
-                    d={line}
-                    fill="none"
-                    stroke={blue}
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {pts.map((p, i) => (
-                    <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
-                  ))}
-                  {pts.map((p, i) => (
-                    <text
-                      key={`v${i}`}
-                      x={p.x}
-                      y={p.y - 10}
-                      textAnchor="middle"
-                      fill="rgba(255,255,255,.4)"
-                      style={{ fontFamily: ft.mono, fontSize: 9 }}
-                    >
-                      {(d[i] / 1000).toFixed(0)}K
-                    </text>
-                  ))}
-                  {months.slice(0, d.length).map((m, i) => (
-                    <text
-                      key={`m${i}`}
-                      x={(i / (d.length - 1)) * chartW}
-                      y={chartH + 16}
-                      textAnchor="middle"
-                      fill="rgba(255,255,255,.15)"
-                      style={{ fontFamily: ft.mono, fontSize: 8 }}
-                    >
-                      {m}
-                    </text>
-                  ))}
-                </svg>
-              </div>
-            </Card>
+                <button
+                  onClick={() => {
+                    setDetailId(intent.id);
+                    setFocused(null);
+                  }}
+                  style={{
+                    width: "100%",
+                    marginTop: 14,
+                    fontFamily: ft.display,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                    border: "none",
+                    padding: "12px 0",
+                    borderRadius: 10,
+                    cursor: "pointer",
+                  }}
+                >
+                  Activate This Intent →
+                </button>
+              </Card>
+
+              {/* Related SMB Requests */}
+              {related.length > 0 && (
+                <Card mob={mob}>
+                  <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>
+                    Related SMB Requests
+                  </h3>
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {related.map((r) => {
+                      const sc = STATUS_CFG[r.status];
+                      return (
+                        <div
+                          key={r.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "10px 12px",
+                            background: "rgba(255,255,255,.015)",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255,255,255,.03)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 7,
+                              background: "rgba(66,165,245,.06)",
+                              border: "1px solid rgba(66,165,245,.08)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontFamily: ft.mono,
+                              fontSize: 9,
+                              fontWeight: 700,
+                              color: blue,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {r.business
+                              .split(" ")
+                              .map((w) => w[0])
+                              .join("")
+                              .slice(0, 2)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {r.queries}
+                            </div>
+                            <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
+                              {r.business} · {r.budget}
+                            </div>
+                          </div>
+                          <Badge color={sc.color} bg={sc.bg}>
+                            {sc.label}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+            </div>
           );
         })()}
     </div>
