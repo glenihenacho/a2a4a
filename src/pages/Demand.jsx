@@ -932,7 +932,7 @@ const SCRIPT = [
       {
         role: "assistant",
         ui: "agentMatch",
-        data: { agents: [AGENTS_FALLBACK[0], AGENTS_FALLBACK[4], AGENTS_FALLBACK[1]] },
+        data: { agents: [AGENTS_FALLBACK[0], AGENTS_FALLBACK[2], AGENTS_FALLBACK[1]] },
         delay: 3800,
       },
       {
