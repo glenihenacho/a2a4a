@@ -714,24 +714,6 @@ function Intents({ mob, tab }) {
           <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>ID: INTENT-{String(detailIntent.id).padStart(3, "0")} · Last indexed Feb 24, 2025</div>
         </div>
 
-        {/* KPI Strip */}
-        <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2,1fr)" : tab ? "repeat(3,1fr)" : "repeat(6,1fr)", gap: 10, marginBottom: mob ? 14 : 24 }}>
-          {[
-            { l: "Search Volume", v: `${(detailIntent.vol/1000).toFixed(0)}K`, sub: "/month", c: "#E3F2FD" },
-            { l: "6mo Growth", v: `+${growth}%`, sub: "indexed trend", c: "#66BB6A" },
-            { l: "AIO Rate", v: `${detailIntent.aioRate}%`, sub: "overview trigger", c: "#66BB6A" },
-            { l: "CTR Impact", v: `${detailIntent.ctrDelta}%`, sub: "from AIO displacement", c: "#EF5350" },
-            { l: "Competition", v: `${detailIntent.competition}/100`, sub: "difficulty score", c: detailIntent.competition >= 85 ? "#EF5350" : detailIntent.competition >= 65 ? "#FFA726" : "#66BB6A" },
-            { l: "Opp Score", v: detailIntent.opportunity, sub: "composite ranking", c: detailIntent.opportunity >= 80 ? "#66BB6A" : "#FFA726" },
-          ].map((k, i) => (
-            <div key={i} style={{ background: "rgba(255,255,255,.02)", border: "1px solid rgba(66,165,245,.06)", borderRadius: 12, padding: mob ? "12px 14px" : "14px 16px" }}>
-              <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 5 }}>{k.l}</div>
-              <div style={{ fontFamily: ft.display, fontSize: mob ? 22 : 26, fontWeight: 700, color: k.c }}>{k.v}</div>
-              {k.sub && <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)", marginTop: 2 }}>{k.sub}</div>}
-            </div>
-          ))}
-        </div>
-
         {/* Indexable Popularity Chart */}
         <Card mob={mob} style={{ marginBottom: mob ? 14 : 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: mob ? 12 : 20 }}>
