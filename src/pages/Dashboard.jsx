@@ -775,24 +775,42 @@ function Intents({ mob, tab }) {
 
   if (detailIntent) {
     const d = detailIntent.volTrend;
-    const max = Math.max(...d);
-    const min = Math.min(...d);
     const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-    const chartH = mob ? 160 : 220;
+    const chartH = mob ? 180 : 260;
     const chartW = mob ? 300 : 680;
-    const pts = d.map((v, i) => ({
-      x: 40 + (i / (d.length - 1)) * (chartW - 60),
-      y: 16 + (chartH - 40) - ((v - min) / (max - min || 1)) * (chartH - 40),
-    }));
-    const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-    const area = `${line} L${pts[pts.length - 1].x},${chartH} L${pts[0].x},${chartH} Z`;
     const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
     const catColor = INTENT_CATEGORIES.find((c) => c.name === detailIntent.category)?.color || "#78909C";
     const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
     const monthlyEst = Math.round(budgetNum * 4.33);
-    // Y-axis labels
-    const ySteps = 5;
-    const yLabels = Array.from({ length: ySteps + 1 }, (_, i) => Math.round(min + (max - min) * (i / ySteps)));
+
+    // Supply trend derived from competition × volume
+    const supplyTrend = d.map((v, i) => Math.round((detailIntent.competition / 100) * v * (0.6 + i * 0.06)));
+    const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
+    const chartMax = Math.max(...allVals);
+    const chartMin = Math.min(...allVals);
+    const range = chartMax - chartMin || 1;
+    const pad = { top: 16, bottom: 44, left: 44, right: 20 };
+    const plotW = chartW - pad.left - pad.right;
+    const plotH = chartH - pad.top - pad.bottom;
+
+    const demandPts = d.map((v, i) => ({
+      x: pad.left + (i / (d.length - 1)) * plotW,
+      y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+    }));
+    const supplyPts = supplyTrend.map((v, i) => ({
+      x: pad.left + (i / (d.length - 1)) * plotW,
+      y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+    }));
+    const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+    const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
+    const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
+
+    // Matching signal for agent count
+    const matchSignal = LIVE_SIGNALS?.find((s) =>
+      s.query?.toLowerCase().includes(detailIntent.query.split(" ")[0].toLowerCase()),
+    );
+    const agentCount = matchSignal?.agents || Math.max(1, Math.round(detailIntent.competition / 20));
 
     return (
       <div>
@@ -922,8 +940,8 @@ function Intents({ mob, tab }) {
           ))}
         </div>
 
-        {/* Indexable Popularity Chart */}
-        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24 }}>
+        {/* Indexable Popularity — Demand vs Supply */}
+        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
           <div
             style={{
               display: "flex",
@@ -937,56 +955,89 @@ function Intents({ mob, tab }) {
                 Indexable Popularity
               </h3>
               <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>
-                Monthly search volume trend · 6 month window
+                6-month demand vs supply trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
               </div>
             </div>
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 12,
-                fontWeight: 700,
-                color: "#66BB6A",
-                background: "rgba(102,187,106,.06)",
-                padding: "4px 12px",
-                borderRadius: 6,
-              }}
-            >
-              +{growth}%
+            <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
+                <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
+                <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
+              </div>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#66BB6A",
+                  background: "rgba(102,187,106,.06)",
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                }}
+              >
+                +{growth}%
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
-            <svg width={chartW} height={chartH + 30} style={{ overflow: "visible" }}>
+            <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
               <defs>
-                <linearGradient id={`ipFill${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={blue} stopOpacity=".18" />
+                <linearGradient id={`demFillD${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={blue} stopOpacity=".15" />
                   <stop offset="100%" stopColor={blue} stopOpacity="0" />
+                </linearGradient>
+                <linearGradient id={`supFillD${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
+                  <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
                 </linearGradient>
               </defs>
               {/* Grid lines */}
-              {yLabels.map((yv, i) => {
-                const yy = 16 + (chartH - 40) - ((yv - min) / (max - min || 1)) * (chartH - 40);
+              {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                const yy = pad.top + plotH * (1 - pct);
+                const val = chartMin + range * pct;
                 return (
                   <g key={i}>
-                    <line x1={40} y1={yy} x2={chartW - 20} y2={yy} stroke="rgba(255,255,255,.03)" />
+                    <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
                     <text
-                      x={36}
+                      x={pad.left - 4}
                       y={yy + 3}
                       textAnchor="end"
                       fill="rgba(255,255,255,.15)"
                       style={{ fontFamily: ft.mono, fontSize: 8 }}
                     >
-                      {(yv / 1000).toFixed(0)}K
+                      {(val / 1000).toFixed(0)}K
                     </text>
                   </g>
                 );
               })}
-              {/* Area + Line */}
-              <path d={area} fill={`url(#ipFill${detailIntent.id})`} />
-              <path d={line} fill="none" stroke={blue} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-              {/* Dots + Values */}
-              {pts.map((p, i) => (
-                <g key={i}>
-                  <circle cx={p.x} cy={p.y} r={5} fill="#0A0F1A" stroke={blue} strokeWidth={2.5} />
+              {/* Supply area + line */}
+              <path d={supplyArea} fill={`url(#supFillD${detailIntent.id})`} />
+              <path
+                d={supplyLine}
+                fill="none"
+                stroke="#FFA726"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="6 3"
+              />
+              {/* Demand area + line */}
+              <path d={demandArea} fill={`url(#demFillD${detailIntent.id})`} />
+              <path
+                d={demandLine}
+                fill="none"
+                stroke={blue}
+                strokeWidth={2.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {/* Demand dots + values */}
+              {demandPts.map((p, i) => (
+                <g key={`d${i}`}>
+                  <circle cx={p.x} cy={p.y} r={4.5} fill="#0A0F1A" stroke={blue} strokeWidth={2.5} />
                   <text
                     x={p.x}
                     y={p.y - 12}
@@ -998,12 +1049,45 @@ function Intents({ mob, tab }) {
                   </text>
                 </g>
               ))}
+              {/* Supply dots */}
+              {supplyPts.map((p, i) => (
+                <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
+              ))}
+              {/* Gap highlight at last point */}
+              {(() => {
+                const dLast = demandPts[demandPts.length - 1];
+                const sLast = supplyPts[supplyPts.length - 1];
+                const gap = Math.abs(dLast.y - sLast.y);
+                if (gap < 8) return null;
+                const midY = (dLast.y + sLast.y) / 2;
+                return (
+                  <>
+                    <line
+                      x1={dLast.x + 8}
+                      y1={dLast.y}
+                      x2={dLast.x + 8}
+                      y2={sLast.y}
+                      stroke="rgba(102,187,106,.3)"
+                      strokeWidth={1}
+                      strokeDasharray="2 2"
+                    />
+                    <text
+                      x={dLast.x + 14}
+                      y={midY + 3}
+                      fill="#66BB6A"
+                      style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
+                    >
+                      GAP
+                    </text>
+                  </>
+                );
+              })()}
               {/* X-axis labels */}
               {months.slice(0, d.length).map((m, i) => (
                 <text
                   key={`m${i}`}
-                  x={pts[i].x}
-                  y={chartH + 18}
+                  x={demandPts[i].x}
+                  y={chartH - 4}
                   textAnchor="middle"
                   fill="rgba(255,255,255,.2)"
                   style={{ fontFamily: ft.mono, fontSize: 9 }}
@@ -1013,307 +1097,347 @@ function Intents({ mob, tab }) {
               ))}
             </svg>
           </div>
-        </Card>
-
-        {/* Detail Grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: mob ? "1fr" : "1fr 1fr",
-            gap: mob ? 10 : 16,
-            marginBottom: mob ? 14 : 24,
-          }}
-        >
-          {/* AIO Landscape */}
-          <Card mob={mob}>
-            <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>AIO Landscape</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                { l: "AIO Trigger Rate", v: `${detailIntent.aioRate}%`, c: "#66BB6A" },
-                { l: "Sources Cited", v: detailIntent.aioCited, c: blue },
-                { l: "Avg SERP Position", v: `#${detailIntent.avgPos}`, c: "#E3F2FD" },
-                { l: "CTR Displacement", v: `${detailIntent.ctrDelta}%`, c: "#EF5350" },
-              ].map((m, i) => (
-                <div
-                  key={i}
-                  style={{ textAlign: "center", padding: 12, background: "rgba(255,255,255,.015)", borderRadius: 8 }}
-                >
-                  <div style={{ fontFamily: ft.display, fontSize: 20, fontWeight: 700, color: m.c }}>{m.v}</div>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "rgba(255,255,255,.18)",
-                      textTransform: "uppercase",
-                      marginTop: 3,
-                    }}
-                  >
-                    {m.l}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Budget & Activation */}
-          <Card
-            mob={mob}
+          {/* Gap summary strip */}
+          <div
             style={{
-              background: budgetSaved ? "rgba(102,187,106,.02)" : goingLive ? "rgba(66,165,245,.02)" : undefined,
-              borderColor: budgetSaved ? "rgba(102,187,106,.12)" : goingLive ? "rgba(66,165,245,.12)" : undefined,
+              display: "flex",
+              gap: mob ? 8 : 16,
+              marginTop: 14,
+              padding: "10px 14px",
+              background: "rgba(102,187,106,.03)",
+              borderRadius: 8,
+              border: "1px solid rgba(102,187,106,.06)",
+              flexWrap: "wrap",
             }}
           >
-            <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-              Budget & Activation
-            </h3>
-            <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)", marginBottom: 16 }}>
-              Set a weekly budget to activate this intent as a live signal
-            </div>
-
-            {budgetSaved ? (
-              <div>
-                <div style={{ textAlign: "center", padding: "20px 0 16px" }}>
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 12,
-                      background: "rgba(102,187,106,.1)",
-                      border: "1px solid rgba(102,187,106,.2)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 22,
-                      margin: "0 auto 12px",
-                    }}
-                  >
-                    ✓
-                  </div>
-                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                    Intent Live
-                  </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 4 }}>
-                    ${budgetNum.toLocaleString()}/week · ${monthlyEst.toLocaleString()}/mo est.
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button
-                    onClick={() => setBudgetSaved(false)}
-                    style={{
-                      flex: 1,
-                      fontFamily: ft.mono,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "rgba(255,255,255,.35)",
-                      background: "rgba(255,255,255,.03)",
-                      border: "1px solid rgba(255,255,255,.06)",
-                      padding: "10px 0",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Edit Budget
-                  </button>
-                  <button
-                    onClick={() => {
-                      setDetailId(null);
-                      setWeeklyBudget("");
-                      setBudgetSaved(false);
-                    }}
-                    style={{
-                      flex: 1,
-                      fontFamily: ft.mono,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: blue,
-                      background: "rgba(66,165,245,.06)",
-                      border: "1px solid rgba(66,165,245,.12)",
-                      padding: "10px 0",
-                      borderRadius: 8,
-                      cursor: "pointer",
-                    }}
-                  >
-                    View in Live →
-                  </button>
-                </div>
+            <div style={{ flex: 1, minWidth: 80 }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.2)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                }}
+              >
+                Demand Volume
               </div>
-            ) : (
-              <div>
+              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
+                {(detailIntent.vol / 1000).toFixed(0)}K
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 80 }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.2)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                }}
+              >
+                Supply Capacity
+              </div>
+              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
+                {agentCount} agent{agentCount !== 1 ? "s" : ""}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 80 }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.2)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                }}
+              >
+                Market Gap
+              </div>
+              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+                {detailIntent.competition < 75 ? "High" : detailIntent.competition < 90 ? "Medium" : "Narrow"}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 80 }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.2)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                }}
+              >
+                AIO Coverage
+              </div>
+              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+                {detailIntent.aioRate}%
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}> · {detailIntent.aioCited} cited</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Budget & Allocation */}
+        <Card
+          mob={mob}
+          style={{
+            marginBottom: mob ? 14 : 24,
+            background: budgetSaved ? "rgba(102,187,106,.02)" : goingLive ? "rgba(66,165,245,.02)" : undefined,
+            borderColor: budgetSaved ? "rgba(102,187,106,.12)" : goingLive ? "rgba(66,165,245,.12)" : undefined,
+          }}
+        >
+          <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+            Budget & Activation
+          </h3>
+          <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)", marginBottom: 16 }}>
+            Set a weekly budget to activate this intent as a live signal
+          </div>
+
+          {budgetSaved ? (
+            <div>
+              <div style={{ textAlign: "center", padding: "20px 0 16px" }}>
                 <div
                   style={{
-                    fontFamily: ft.mono,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    color: "rgba(255,255,255,.25)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".08em",
-                    marginBottom: 8,
+                    width: 48,
+                    height: 48,
+                    borderRadius: 12,
+                    background: "rgba(102,187,106,.1)",
+                    border: "1px solid rgba(102,187,106,.2)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 22,
+                    margin: "0 auto 12px",
                   }}
                 >
-                  Weekly Budget (USD)
+                  ✓
                 </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <div style={{ flex: 1, position: "relative" }}>
-                    <span
+                <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+                  Intent Live
+                </div>
+                <div style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 4 }}>
+                  ${budgetNum.toLocaleString()}/week · ${monthlyEst.toLocaleString()}/mo est.
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button
+                  onClick={() => setBudgetSaved(false)}
+                  style={{
+                    flex: 1,
+                    fontFamily: ft.mono,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "rgba(255,255,255,.35)",
+                    background: "rgba(255,255,255,.03)",
+                    border: "1px solid rgba(255,255,255,.06)",
+                    padding: "10px 0",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  Edit Budget
+                </button>
+                <button
+                  onClick={() => {
+                    setDetailId(null);
+                    setWeeklyBudget("");
+                    setBudgetSaved(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    fontFamily: ft.mono,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: blue,
+                    background: "rgba(66,165,245,.06)",
+                    border: "1px solid rgba(66,165,245,.12)",
+                    padding: "10px 0",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  View in Live →
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 9,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.25)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".08em",
+                  marginBottom: 8,
+                }}
+              >
+                Weekly Budget (USD)
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                <div style={{ flex: 1, position: "relative" }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 14,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontFamily: ft.display,
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,.15)",
+                    }}
+                  >
+                    $
+                  </span>
+                  <input
+                    value={weeklyBudget}
+                    onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="500"
+                    style={{
+                      width: "100%",
+                      fontFamily: ft.display,
+                      fontSize: 22,
+                      fontWeight: 700,
+                      background: "rgba(0,0,0,.25)",
+                      border: "1px solid rgba(66,165,245,.12)",
+                      borderRadius: 10,
+                      padding: "14px 14px 14px 32px",
+                      color: "#E3F2FD",
+                      outline: "none",
+                      textAlign: "left",
+                    }}
+                  />
+                </div>
+              </div>
+              {/* Quick budget pills */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                {[250, 500, 1000, 2000, 5000].map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setWeeklyBudget(String(v))}
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
+                      background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
+                      border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ${v.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              {/* Monthly estimate */}
+              {budgetNum > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    background: "rgba(255,255,255,.015)",
+                    borderRadius: 8,
+                    marginBottom: 14,
+                  }}
+                >
+                  <div>
+                    <div
                       style={{
-                        position: "absolute",
-                        left: 14,
-                        top: "50%",
-                        transform: "translateY(-50%)",
+                        fontFamily: ft.mono,
+                        fontSize: 9,
+                        color: "rgba(255,255,255,.2)",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Monthly Estimate
+                    </div>
+                    <div
+                      style={{
                         fontFamily: ft.display,
                         fontSize: 18,
                         fontWeight: 700,
-                        color: "rgba(255,255,255,.15)",
+                        color: "#E3F2FD",
+                        marginTop: 2,
                       }}
                     >
-                      $
-                    </span>
-                    <input
-                      value={weeklyBudget}
-                      onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
-                      placeholder="500"
-                      style={{
-                        width: "100%",
-                        fontFamily: ft.display,
-                        fontSize: 22,
-                        fontWeight: 700,
-                        background: "rgba(0,0,0,.25)",
-                        border: "1px solid rgba(66,165,245,.12)",
-                        borderRadius: 10,
-                        padding: "14px 14px 14px 32px",
-                        color: "#E3F2FD",
-                        outline: "none",
-                        textAlign: "left",
-                      }}
-                    />
+                      ${monthlyEst.toLocaleString()}
+                      <span
+                        style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,.2)" }}
+                      >
+                        /mo
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {/* Quick budget pills */}
-                <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-                  {[250, 500, 1000, 2000, 5000].map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setWeeklyBudget(String(v))}
+                  <div style={{ textAlign: "right" }}>
+                    <div
                       style={{
                         fontFamily: ft.mono,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
-                        background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
-                        border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
-                        padding: "6px 12px",
-                        borderRadius: 6,
-                        cursor: "pointer",
+                        fontSize: 9,
+                        color: "rgba(255,255,255,.2)",
+                        textTransform: "uppercase",
                       }}
                     >
-                      ${v.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-                {/* Monthly estimate */}
-                {budgetNum > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "10px 14px",
-                      background: "rgba(255,255,255,.015)",
-                      borderRadius: 8,
-                      marginBottom: 14,
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 9,
-                          color: "rgba(255,255,255,.2)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Monthly Estimate
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: ft.display,
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color: "#E3F2FD",
-                          marginTop: 2,
-                        }}
-                      >
-                        ${monthlyEst.toLocaleString()}
-                        <span
-                          style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,.2)" }}
-                        >
-                          /mo
-                        </span>
-                      </div>
+                      Cost per 1K Impressions
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 9,
-                          color: "rgba(255,255,255,.2)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Cost per 1K Impressions
-                      </div>
-                      <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue, marginTop: 2 }}>
-                        ${detailIntent.vol > 0 ? (monthlyEst / (detailIntent.vol / 1000)).toFixed(2) : "—"}
-                      </div>
+                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue, marginTop: 2 }}>
+                      ${detailIntent.vol > 0 ? (monthlyEst / (detailIntent.vol / 1000)).toFixed(2) : "—"}
                     </div>
                   </div>
-                )}
-                <button
-                  onClick={() => {
-                    if (budgetNum > 0) {
-                      setGoingLive(true);
-                      setTimeout(() => setBudgetSaved(true), 1200);
-                    }
-                  }}
-                  disabled={budgetNum <= 0}
-                  style={{
-                    width: "100%",
-                    fontFamily: ft.display,
-                    fontSize: 16,
-                    fontWeight: 700,
-                    color: "#fff",
-                    background:
-                      budgetNum > 0
-                        ? goingLive
-                          ? "rgba(66,165,245,.15)"
-                          : `linear-gradient(135deg, ${blueDeep}, ${blue})`
-                        : "rgba(255,255,255,.04)",
-                    border: "none",
-                    padding: "14px 0",
-                    borderRadius: 10,
-                    cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
-                    opacity: budgetNum > 0 ? 1 : 0.4,
-                    transition: "all .3s",
-                  }}
-                >
-                  {goingLive ? "Activating..." : "Go Live →"}
-                </button>
-                <div
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 9,
-                    color: "rgba(255,255,255,.12)",
-                    textAlign: "center",
-                    marginTop: 8,
-                  }}
-                >
-                  Budget held in escrow · Agents bid competitively · SLA-enforced delivery
                 </div>
+              )}
+              <button
+                onClick={() => {
+                  if (budgetNum > 0) {
+                    setGoingLive(true);
+                    setTimeout(() => setBudgetSaved(true), 1200);
+                  }
+                }}
+                disabled={budgetNum <= 0}
+                style={{
+                  width: "100%",
+                  fontFamily: ft.display,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#fff",
+                  background:
+                    budgetNum > 0
+                      ? goingLive
+                        ? "rgba(66,165,245,.15)"
+                        : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                      : "rgba(255,255,255,.04)",
+                  border: "none",
+                  padding: "14px 0",
+                  borderRadius: 10,
+                  cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
+                  opacity: budgetNum > 0 ? 1 : 0.4,
+                  transition: "all .3s",
+                }}
+              >
+                {goingLive ? "Activating..." : "Go Live →"}
+              </button>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 9,
+                  color: "rgba(255,255,255,.12)",
+                  textAlign: "center",
+                  marginTop: 8,
+                }}
+              >
+                Budget held in escrow · Agents bid competitively · SLA-enforced delivery
               </div>
-            )}
-          </Card>
-        </div>
+            </div>
+          )}
+        </Card>
 
-        {/* Matched Intents (SMBs with similar needs) */}
+        {/* Related SMB Requests */}
         {(() => {
           const related = MOCK_INTENTS.filter((i) => i.vertical === detailIntent.vertical);
           if (!related.length) return null;
