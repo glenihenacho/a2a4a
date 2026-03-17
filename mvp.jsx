@@ -831,17 +831,17 @@ function Intents({ mob, tab }) {
           return (
             <Card mob={mob}>
               <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Related SMB Requests</h3>
-              <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ display: "grid", gap: 6, overflow: "hidden" }}>
                 {related.map(r => {
-                  const sc = STATUS_CFG[r.status];
+                  const mm = INTENT_MARKET.find(m => m.query?.toLowerCase().includes(r.queries.split(" ")[0].toLowerCase()) || r.queries.toLowerCase().includes(m.query?.split(" ")[0].toLowerCase()));
+                  const opp = mm?.opportunity || Math.min(99, (r.bids || 1) * 18 + 20);
                   return (
-                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "rgba(255,255,255,.015)", borderRadius: 8, border: "1px solid rgba(255,255,255,.03)" }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(66,165,245,.06)", border: "1px solid rgba(66,165,245,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color: blue, flexShrink: 0 }}>{r.business.split(" ").map(w => w[0]).join("").slice(0,2)}</div>
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "rgba(255,255,255,.015)", borderRadius: 8, border: "1px solid rgba(255,255,255,.03)", overflow: "hidden" }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: opp >= 80 ? "rgba(102,187,106,.08)" : opp >= 60 ? "rgba(255,167,38,.08)" : "rgba(66,165,245,.06)", border: `1px solid ${opp >= 80 ? "rgba(102,187,106,.15)" : opp >= 60 ? "rgba(255,167,38,.15)" : "rgba(66,165,245,.08)"}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: ft.mono, fontSize: 11, fontWeight: 700, color: opp >= 80 ? "#66BB6A" : opp >= 60 ? "#FFA726" : blue, flexShrink: 0 }}>{opp}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.queries}</div>
-                        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>{r.business} · {r.budget}</div>
+                        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>{r.budget}</div>
                       </div>
-                      <Badge color={sc.color} bg={sc.bg}>{sc.label}</Badge>
                     </div>
                   );
                 })}
