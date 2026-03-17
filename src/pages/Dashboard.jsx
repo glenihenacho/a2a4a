@@ -1801,7 +1801,14 @@ function Intents({ mob, tab }) {
                     return (
                       <div
                         key={i}
-                        onClick={() => matchedMarket && setFocused(matchedMarket.id)}
+                        onClick={() => {
+                          if (matchedMarket) {
+                            setDetailId(matchedMarket.id);
+                            setWeeklyBudget("");
+                            setBudgetSaved(false);
+                            setGoingLive(false);
+                          }
+                        }}
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -1851,7 +1858,14 @@ function Intents({ mob, tab }) {
               return (
                 <div
                   key={i}
-                  onClick={() => matchedMarket && setFocused(matchedMarket.id)}
+                  onClick={() => {
+                    if (matchedMarket) {
+                      setDetailId(matchedMarket.id);
+                      setWeeklyBudget("");
+                      setBudgetSaved(false);
+                      setGoingLive(false);
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",
