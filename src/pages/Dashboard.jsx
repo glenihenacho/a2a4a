@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { ft, blue, blueDeep, bg } from "../shared/tokens";
 import { useMedia, useApiData } from "../shared/hooks";
@@ -5451,13 +5451,7 @@ function Live({ mob, tab }) {
     ? (LIVE_SIGNALS.reduce((s, sig) => s + sig.agents, 0) / LIVE_SIGNALS.length).toFixed(1)
     : "0.0";
   const aioVisible = LIVE_SIGNALS.filter((s) => s.aioVisible).length;
-  const avgCtr = LIVE_SIGNALS.length
-    ? (LIVE_SIGNALS.reduce((s, sig) => s + sig.ctr, 0) / LIVE_SIGNALS.length).toFixed(1)
-    : "0.0";
-
   const statusColors = { live: "#66BB6A", warming: "#FFA726", cooling: "#78909C" };
-  const aioPosColors = { featured: "#42A5F5", cited: "#64B5F6", mentioned: "#90CAF9", none: "rgba(255,255,255,.15)" };
-
   const getAgentsForSignal = (sig) =>
     (ALL_AGENTS || []).filter(
       (a) => a.status === "live" && a.verticals?.some((v) => v.toLowerCase() === sig.vertical?.toLowerCase()),
@@ -5654,7 +5648,6 @@ function Live({ mob, tab }) {
     { label: "Active SMBs", value: liveCount, sub: `of ${LIVE_SIGNALS.length} tracked`, color: "#66BB6A" },
     { label: "Total Spend", value: `$${(totalSpend / 1000).toFixed(1)}k`, sub: "avg monthly", color: blue },
     { label: "Impressions", value: `${(totalImpressions / 1000).toFixed(0)}K`, sub: "this period", color: "#64B5F6" },
-    { label: "Avg CTR", value: `${avgCtr}%`, sub: "across signals", color: "#AB47BC" },
     {
       label: "AIO Visible",
       value: `${aioVisible}/${LIVE_SIGNALS.length}`,
@@ -5872,7 +5865,11 @@ function Live({ mob, tab }) {
           {sorted.map((sig) => (
             <div
               key={sig.id}
-              onClick={() => setExpanded(expanded === sig.id ? null : sig.id)}
+              onClick={() => {
+                const next = expanded === sig.id ? null : sig.id;
+                setExpanded(next);
+                setBudgetMgr(next);
+              }}
               style={{
                 background: "rgba(255,255,255,.02)",
                 border: `1px solid ${expanded === sig.id ? "rgba(66,165,245,.15)" : "rgba(66,165,245,.06)"}`,
@@ -5924,9 +5921,8 @@ function Live({ mob, tab }) {
                 {sig.query}
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
-                <VBadge v={sig.vertical} />
-                <Badge color={aioPosColors[sig.aioPos]} bg={`${aioPosColors[sig.aioPos]}15`}>
-                  {sig.aioPos === "none" ? "No AIO" : `AIO: ${sig.aioPos}`}
+                <Badge color="rgba(255,255,255,.45)" bg="rgba(255,255,255,.04)">
+                  {sig.category}
                 </Badge>
                 <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)", marginLeft: "auto" }}>
                   {sig.lastUpdate}
@@ -5970,138 +5966,32 @@ function Live({ mob, tab }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    CTR
+                    Impressions
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 700, color: "#AB47BC" }}>{sig.ctr}%</div>
+                  <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 700, color: "#AB47BC" }}>
+                    {(sig.impressions / 1000).toFixed(1)}K
+                  </div>
                 </div>
               </div>
-              {expanded === sig.id && (
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.04)" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                    <div>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Top Bid
-                      </span>
-                      <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 600, color: "#FFA726" }}>
-                        ${sig.topBid.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Impressions
-                      </span>
-                      <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 600 }}>
-                        {(sig.impressions / 1000).toFixed(1)}K
-                      </div>
-                    </div>
-                    <div>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Clicks
-                      </span>
-                      <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 600 }}>
-                        {sig.clicks.toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Category
-                      </span>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.5)" }}>{sig.category}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <span
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 8,
-                        color: "rgba(255,255,255,.18)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      7-Day Spend Trend
-                    </span>
-                  </div>
-                  <div style={{ marginTop: 6 }}>
-                    <Sparkline data={sig.spend7d} width={200} height={28} color={blue} />
-                  </div>
-                  {budgetMgr === sig.id ? (
-                    <AgentBudgetPanel sig={sig} />
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setBudgetMgr(sig.id);
-                      }}
-                      style={{
-                        width: "100%",
-                        fontFamily: ft.mono,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: blue,
-                        background: "rgba(66,165,245,.04)",
-                        border: "1px solid rgba(66,165,245,.1)",
-                        padding: "8px 0",
-                        borderRadius: 6,
-                        cursor: "pointer",
-                        marginTop: 12,
-                      }}
-                    >
-                      Manage Budget per Agent
-                    </button>
-                  )}
-                </div>
-              )}
+              {expanded === sig.id && <AgentBudgetPanel sig={sig} />}
             </div>
           ))}
         </div>
       ) : (
         <Card mob={mob} style={{ padding: 0, overflow: "hidden" }}>
           <ScrollX>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1130 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(66,165,245,.06)" }}>
                   {[
                     "",
                     "Rank",
                     "SMB Demand Signal",
-                    "Vertical",
-                    "AIO Position",
+                    "Industry",
                     "Signal",
                     "Avg Spend",
-                    "Top Bid",
                     "Agents",
                     "Impressions",
-                    "CTR",
-                    "7d Trend",
-                    "Updated",
                     "Budget",
                   ].map((h) => (
                     <th
@@ -6124,183 +6014,145 @@ function Live({ mob, tab }) {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((sig) => (
-                  <tr
-                    key={sig.id}
-                    style={{ borderBottom: "1px solid rgba(255,255,255,.02)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(66,165,245,.015)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                  >
-                    <td style={{ padding: "12px 8px", width: 20 }}>
-                      <PulsingDot color={statusColors[sig.status]} pulse={pulse} />
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontFamily: ft.display, fontSize: 17, fontWeight: 700, color: "#E3F2FD" }}>
-                          #{sig.rank}
-                        </span>
-                        <RankDelta current={sig.rank} prev={sig.prevRank} />
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 8px", maxWidth: 220 }}>
-                      <div
+                {sorted.map((sig) => {
+                  const isSelected = budgetMgr === sig.id;
+                  return (
+                    <Fragment key={sig.id}>
+                      <tr
                         style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
+                          borderBottom: isSelected ? "none" : "1px solid rgba(255,255,255,.02)",
+                          cursor: "pointer",
+                          background: isSelected ? "rgba(66,165,245,.02)" : "transparent",
+                        }}
+                        onClick={() => setBudgetMgr(isSelected ? null : sig.id)}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "rgba(66,165,245,.015)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = "transparent";
                         }}
                       >
-                        {sig.query}
-                      </div>
-                      <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)", marginTop: 2 }}>
-                        {sig.category} · {sig.id}
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <VBadge v={sig.vertical} />
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <Badge color={aioPosColors[sig.aioPos]} bg={`${aioPosColors[sig.aioPos]}15`}>
-                        {sig.aioPos === "none" ? "—" : sig.aioPos}
-                      </Badge>
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 8,
-                          background:
-                            sig.signal >= 85
-                              ? "rgba(102,187,106,.1)"
-                              : sig.signal >= 60
-                                ? "rgba(255,167,38,.1)"
-                                : "rgba(255,255,255,.03)",
-                          border: `1px solid ${sig.signal >= 85 ? "rgba(102,187,106,.18)" : sig.signal >= 60 ? "rgba(255,167,38,.12)" : "rgba(255,255,255,.05)"}`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontFamily: ft.display,
-                          fontSize: 15,
-                          fontWeight: 700,
-                          color: sig.signal >= 85 ? "#66BB6A" : sig.signal >= 60 ? "#FFA726" : "rgba(255,255,255,.35)",
-                        }}
-                      >
-                        {sig.signal}
-                      </div>
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: blue,
-                        padding: "12px 8px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ${sig.avgSpend.toLocaleString()}
-                      <span style={{ fontSize: 9, color: "rgba(255,255,255,.15)" }}>/mo</span>
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#FFA726",
-                        padding: "12px 8px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      ${sig.topBid.toLocaleString()}
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        padding: "12px 8px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {sig.agents}
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 11,
-                        color: "rgba(255,255,255,.4)",
-                        padding: "12px 8px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {(sig.impressions / 1000).toFixed(1)}K
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: "#AB47BC",
-                        padding: "12px 8px",
-                      }}
-                    >
-                      {sig.ctr}%
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <Sparkline
-                        data={sig.spend7d}
-                        width={56}
-                        height={22}
-                        color={sig.spend7d[6] >= sig.spend7d[0] ? "#66BB6A" : "#EF5350"}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 9,
-                        color: "rgba(255,255,255,.15)",
-                        padding: "12px 8px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {sig.lastUpdate}
-                    </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      {budgetMgr === sig.id ? (
-                        <div style={{ minWidth: 200 }}>
-                          <AgentBudgetPanel sig={sig} />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setBudgetMgr(budgetMgr === sig.id ? null : sig.id);
-                          }}
+                        <td style={{ padding: "12px 8px", width: 20 }}>
+                          <PulsingDot color={statusColors[sig.status]} pulse={pulse} />
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontFamily: ft.display, fontSize: 17, fontWeight: 700, color: "#E3F2FD" }}>
+                              #{sig.rank}
+                            </span>
+                            <RankDelta current={sig.rank} prev={sig.prevRank} />
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 8px", maxWidth: 240 }}>
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {sig.query}
+                          </div>
+                          <div
+                            style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)", marginTop: 2 }}
+                          >
+                            {sig.id}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <Badge color="rgba(255,255,255,.45)" bg="rgba(255,255,255,.04)">
+                            {sig.category}
+                          </Badge>
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <div
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: 8,
+                              background:
+                                sig.signal >= 85
+                                  ? "rgba(102,187,106,.1)"
+                                  : sig.signal >= 60
+                                    ? "rgba(255,167,38,.1)"
+                                    : "rgba(255,255,255,.03)",
+                              border: `1px solid ${sig.signal >= 85 ? "rgba(102,187,106,.18)" : sig.signal >= 60 ? "rgba(255,167,38,.12)" : "rgba(255,255,255,.05)"}`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontFamily: ft.display,
+                              fontSize: 15,
+                              fontWeight: 700,
+                              color:
+                                sig.signal >= 85 ? "#66BB6A" : sig.signal >= 60 ? "#FFA726" : "rgba(255,255,255,.35)",
+                            }}
+                          >
+                            {sig.signal}
+                          </div>
+                        </td>
+                        <td
                           style={{
                             fontFamily: ft.mono,
-                            fontSize: 9,
+                            fontSize: 12,
                             fontWeight: 600,
-                            color: getSignalTotalBudget(sig.id) > 0 ? "#66BB6A" : blue,
-                            background:
-                              getSignalTotalBudget(sig.id) > 0 ? "rgba(102,187,106,.06)" : "rgba(66,165,245,.04)",
-                            border: `1px solid ${getSignalTotalBudget(sig.id) > 0 ? "rgba(102,187,106,.12)" : "rgba(66,165,245,.1)"}`,
-                            padding: "5px 10px",
-                            borderRadius: 5,
-                            cursor: "pointer",
+                            color: blue,
+                            padding: "12px 8px",
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {getSignalTotalBudget(sig.id) > 0
-                            ? `$${getSignalTotalBudget(sig.id).toLocaleString()}`
-                            : "Manage"}
-                        </button>
+                          ${sig.avgSpend.toLocaleString()}
+                          <span style={{ fontSize: 9, color: "rgba(255,255,255,.15)" }}>/mo</span>
+                        </td>
+                        <td
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            padding: "12px 8px",
+                            textAlign: "center",
+                          }}
+                        >
+                          {sig.agents}
+                        </td>
+                        <td
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "#AB47BC",
+                            padding: "12px 8px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {(sig.impressions / 1000).toFixed(1)}K
+                        </td>
+                        <td style={{ padding: "12px 8px" }}>
+                          <span
+                            style={{
+                              fontFamily: ft.mono,
+                              fontSize: 9,
+                              fontWeight: 600,
+                              color: getSignalTotalBudget(sig.id) > 0 ? "#66BB6A" : "rgba(255,255,255,.2)",
+                            }}
+                          >
+                            {getSignalTotalBudget(sig.id) > 0
+                              ? `$${getSignalTotalBudget(sig.id).toLocaleString()}`
+                              : "Click to manage"}
+                          </span>
+                        </td>
+                      </tr>
+                      {isSelected && (
+                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,.02)" }}>
+                          <td colSpan={9} style={{ padding: "0 16px 16px", background: "rgba(66,165,245,.02)" }}>
+                            <AgentBudgetPanel sig={sig} />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </ScrollX>
@@ -6355,8 +6207,8 @@ function Live({ mob, tab }) {
                   >
                     {sig.query}
                   </div>
-                  <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
-                    <VBadge v={sig.vertical} />
+                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)", marginTop: 2 }}>
+                    {sig.category}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
