@@ -682,6 +682,7 @@ function Intents({ mob, tab }) {
     intents: MOCK_INTENTS,
     statusCfg: STATUS_CFG,
     signals: LIVE_SIGNALS,
+    agents: ALL_AGENTS,
   } = useData();
   const [industryTags, setIndustryTags] = useState([]);
   const [industryQuery, setIndustryQuery] = useState("");
@@ -695,6 +696,7 @@ function Intents({ mob, tab }) {
   const [weeklyBudget, setWeeklyBudget] = useState("");
   const [budgetSaved, setBudgetSaved] = useState(false);
   const [goingLive, setGoingLive] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const industryRef = useRef(null);
 
   const industrySuggestions = useMemo(() => {
@@ -812,6 +814,11 @@ function Intents({ mob, tab }) {
     );
     const agentCount = matchSignal?.agents || Math.max(1, Math.round(detailIntent.competition / 20));
 
+    // Matching agents for this intent's vertical
+    const matchingAgents = (ALL_AGENTS || []).filter(
+      (a) => a.status === "live" && a.verticals?.some((v) => v.toLowerCase() === detailIntent.vertical?.toLowerCase()),
+    );
+
     return (
       <div>
         <button
@@ -820,6 +827,7 @@ function Intents({ mob, tab }) {
             setWeeklyBudget("");
             setBudgetSaved(false);
             setGoingLive(false);
+            setSelectedAgent(null);
           }}
           style={{
             fontFamily: ft.mono,
@@ -1137,7 +1145,120 @@ function Intents({ mob, tab }) {
             Set a weekly budget to activate this intent as a live signal
           </div>
 
-          {budgetSaved ? (
+          {budgetSaved && !selectedAgent ? (
+            /* ─── Agent Selection Step ─── */
+            <div>
+              <div style={{ textAlign: "center", padding: "12px 0 14px" }}>
+                <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
+                  Select an Agent
+                </div>
+                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 4 }}>
+                  ${budgetNum.toLocaleString()}/week · {matchingAgents.length} agent
+                  {matchingAgents.length !== 1 ? "s" : ""} available
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {matchingAgents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    onClick={() => setSelectedAgent(agent)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "12px 14px",
+                      background: "rgba(255,255,255,.02)",
+                      border: "1px solid rgba(66,165,245,.08)",
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      transition: "all .2s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(66,165,245,.04)";
+                      e.currentTarget.style.borderColor = "rgba(66,165,245,.2)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(255,255,255,.02)";
+                      e.currentTarget.style.borderColor = "rgba(66,165,245,.08)";
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontFamily: ft.display,
+                        fontSize: 14,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {agent.name?.charAt(0)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{agent.name}</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {agent.verticals?.map((v) => (
+                          <VBadge key={v} v={v} />
+                        ))}
+                        <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
+                          {agent.stats?.successRate}% success
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div
+                        style={{
+                          fontFamily: ft.display,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: agent.stats?.reputation >= 90 ? "#66BB6A" : "#FFA726",
+                        }}
+                      >
+                        {agent.stats?.reputation || 0}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 8,
+                          color: "rgba(255,255,255,.15)",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Rep
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setBudgetSaved(false);
+                  setGoingLive(false);
+                }}
+                style={{
+                  width: "100%",
+                  fontFamily: ft.mono,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.3)",
+                  background: "rgba(255,255,255,.02)",
+                  border: "1px solid rgba(255,255,255,.04)",
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  marginTop: 10,
+                }}
+              >
+                ← Edit Budget
+              </button>
+            </div>
+          ) : budgetSaved && selectedAgent ? (
+            /* ─── Confirmed State ─── */
             <div>
               <div style={{ textAlign: "center", padding: "20px 0 16px" }}>
                 <div
@@ -1160,12 +1281,51 @@ function Intents({ mob, tab }) {
                   Intent Live
                 </div>
                 <div style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 4 }}>
-                  ${budgetNum.toLocaleString()}/week · ${monthlyEst.toLocaleString()}/mo est.
+                  ${budgetNum.toLocaleString()}/week · {selectedAgent.name}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  background: "rgba(102,187,106,.03)",
+                  border: "1px solid rgba(102,187,106,.1)",
+                  borderRadius: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: ft.display,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {selectedAgent.name?.charAt(0)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700 }}>{selectedAgent.name}</div>
+                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
+                    Rep {selectedAgent.stats?.reputation} · {selectedAgent.stats?.successRate}% success
+                  </div>
+                </div>
+                <Badge color="#66BB6A" bg="rgba(102,187,106,.1)">
+                  Engaged
+                </Badge>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
                 <button
-                  onClick={() => setBudgetSaved(false)}
+                  onClick={() => setSelectedAgent(null)}
                   style={{
                     flex: 1,
                     fontFamily: ft.mono,
@@ -1179,13 +1339,14 @@ function Intents({ mob, tab }) {
                     cursor: "pointer",
                   }}
                 >
-                  Edit Budget
+                  Change Agent
                 </button>
                 <button
                   onClick={() => {
                     setDetailId(null);
                     setWeeklyBudget("");
                     setBudgetSaved(false);
+                    setSelectedAgent(null);
                   }}
                   style={{
                     flex: 1,
@@ -5260,11 +5421,13 @@ function PulsingDot({ color, pulse }) {
 }
 
 function Live({ mob, tab }) {
-  const { signals: LIVE_SIGNALS } = useData();
+  const { signals: LIVE_SIGNALS, agents: ALL_AGENTS } = useData();
   const [sort, setSort] = useState("signal");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
   const [pulse, setPulse] = useState(true);
+  const [budgetMgr, setBudgetMgr] = useState(null); // signal id being managed
+  const [agentBudgets, setAgentBudgets] = useState({}); // { signalId: { agentId: amount } }
 
   useEffect(() => {
     const t = setInterval(() => setPulse((p) => !p), 1500);
@@ -5294,6 +5457,187 @@ function Live({ mob, tab }) {
 
   const statusColors = { live: "#66BB6A", warming: "#FFA726", cooling: "#78909C" };
   const aioPosColors = { featured: "#42A5F5", cited: "#64B5F6", mentioned: "#90CAF9", none: "rgba(255,255,255,.15)" };
+
+  const getAgentsForSignal = (sig) =>
+    (ALL_AGENTS || []).filter(
+      (a) => a.status === "live" && a.verticals?.some((v) => v.toLowerCase() === sig.vertical?.toLowerCase()),
+    );
+
+  const updateAgentBudget = (signalId, agentId, amount) => {
+    setAgentBudgets((prev) => ({
+      ...prev,
+      [signalId]: { ...(prev[signalId] || {}), [agentId]: amount },
+    }));
+  };
+
+  const getSignalTotalBudget = (signalId) =>
+    Object.values(agentBudgets[signalId] || {}).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+
+  function AgentBudgetPanel({ sig }) {
+    const agents = getAgentsForSignal(sig);
+    const totalAllocated = getSignalTotalBudget(sig.id);
+    return (
+      <div
+        style={{
+          marginTop: 12,
+          paddingTop: 12,
+          borderTop: "1px solid rgba(66,165,245,.08)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 9,
+              fontWeight: 600,
+              color: "rgba(255,255,255,.25)",
+              textTransform: "uppercase",
+              letterSpacing: ".08em",
+            }}
+          >
+            Budget per Agent
+          </div>
+          <div
+            style={{ fontFamily: ft.mono, fontSize: 10, color: totalAllocated > 0 ? blue : "rgba(255,255,255,.15)" }}
+          >
+            ${totalAllocated.toLocaleString()} allocated
+          </div>
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          {agents.map((agent) => {
+            const val = agentBudgets[sig.id]?.[agent.id] || "";
+            return (
+              <div
+                key={agent.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 10px",
+                  background: "rgba(255,255,255,.015)",
+                  borderRadius: 8,
+                  border: "1px solid rgba(255,255,255,.03)",
+                }}
+              >
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 7,
+                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontFamily: ft.display,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    flexShrink: 0,
+                  }}
+                >
+                  {agent.name?.charAt(0)}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {agent.name}
+                  </div>
+                  <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                    Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                  </div>
+                </div>
+                <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                  <span
+                    style={{
+                      position: "absolute",
+                      left: 8,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      fontFamily: ft.mono,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,.15)",
+                    }}
+                  >
+                    $
+                  </span>
+                  <input
+                    value={val}
+                    onChange={(e) => updateAgentBudget(sig.id, agent.id, e.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="0"
+                    style={{
+                      width: "100%",
+                      fontFamily: ft.mono,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: "rgba(0,0,0,.25)",
+                      border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
+                      borderRadius: 6,
+                      padding: "6px 8px 6px 20px",
+                      color: "#E3F2FD",
+                      outline: "none",
+                      textAlign: "right",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {totalAllocated > 0 && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 8,
+              padding: "8px 10px",
+              background: "rgba(66,165,245,.03)",
+              borderRadius: 6,
+              border: "1px solid rgba(66,165,245,.08)",
+            }}
+          >
+            <span
+              style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)", textTransform: "uppercase" }}
+            >
+              Monthly Est.
+            </span>
+            <span style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, color: blue }}>
+              ${Math.round(totalAllocated * 4.33).toLocaleString()}/mo
+            </span>
+          </div>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setBudgetMgr(null);
+          }}
+          style={{
+            width: "100%",
+            fontFamily: ft.mono,
+            fontSize: 10,
+            fontWeight: 600,
+            color: "rgba(255,255,255,.25)",
+            background: "rgba(255,255,255,.02)",
+            border: "1px solid rgba(255,255,255,.04)",
+            padding: "8px 0",
+            borderRadius: 6,
+            cursor: "pointer",
+            marginTop: 8,
+          }}
+        >
+          Close
+        </button>
+      </div>
+    );
+  }
 
   function RankDelta({ current, prev }) {
     const d = prev - current;
@@ -5708,6 +6052,31 @@ function Live({ mob, tab }) {
                   <div style={{ marginTop: 6 }}>
                     <Sparkline data={sig.spend7d} width={200} height={28} color={blue} />
                   </div>
+                  {budgetMgr === sig.id ? (
+                    <AgentBudgetPanel sig={sig} />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setBudgetMgr(sig.id);
+                      }}
+                      style={{
+                        width: "100%",
+                        fontFamily: ft.mono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: blue,
+                        background: "rgba(66,165,245,.04)",
+                        border: "1px solid rgba(66,165,245,.1)",
+                        padding: "8px 0",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        marginTop: 12,
+                      }}
+                    >
+                      Manage Budget per Agent
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -5716,7 +6085,7 @@ function Live({ mob, tab }) {
       ) : (
         <Card mob={mob} style={{ padding: 0, overflow: "hidden" }}>
           <ScrollX>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1130 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(66,165,245,.06)" }}>
                   {[
@@ -5733,6 +6102,7 @@ function Live({ mob, tab }) {
                     "CTR",
                     "7d Trend",
                     "Updated",
+                    "Budget",
                   ].map((h) => (
                     <th
                       key={h}
@@ -5897,6 +6267,37 @@ function Live({ mob, tab }) {
                       }}
                     >
                       {sig.lastUpdate}
+                    </td>
+                    <td style={{ padding: "12px 8px" }}>
+                      {budgetMgr === sig.id ? (
+                        <div style={{ minWidth: 200 }}>
+                          <AgentBudgetPanel sig={sig} />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBudgetMgr(budgetMgr === sig.id ? null : sig.id);
+                          }}
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: getSignalTotalBudget(sig.id) > 0 ? "#66BB6A" : blue,
+                            background:
+                              getSignalTotalBudget(sig.id) > 0 ? "rgba(102,187,106,.06)" : "rgba(66,165,245,.04)",
+                            border: `1px solid ${getSignalTotalBudget(sig.id) > 0 ? "rgba(102,187,106,.12)" : "rgba(66,165,245,.1)"}`,
+                            padding: "5px 10px",
+                            borderRadius: 5,
+                            cursor: "pointer",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {getSignalTotalBudget(sig.id) > 0
+                            ? `$${getSignalTotalBudget(sig.id).toLocaleString()}`
+                            : "Manage"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
