@@ -281,12 +281,17 @@ async function loadDemoData() {
 }
 
 async function getDemoScope(c) {
-  const session = await getSession(c);
-  if (!session) return null;
-  const email = session.user?.email;
-  if (email === "builder@demo.com") return "full";
-  if (email === "live@demo.com") return "market";
-  return null;
+  try {
+    const session = await getSession(c);
+    if (!session) return null;
+    const email = session.user?.email;
+    if (email === "builder@demo.com") return "full";
+    if (email === "live@demo.com") return "market";
+    return null;
+  } catch (err) {
+    log.warn("getDemoScope failed", { error: err.message });
+    return null;
+  }
 }
 
 // Middleware: require authenticated session for write operations
@@ -404,7 +409,11 @@ function reshapeAgent(r) {
   };
 }
 
-app.get("/api/agents", requireDb, async (c) => {
+app.get("/api/agents", async (c) => {
+  if (!isDbAvailable()) {
+    const { MOCK_AGENTS } = await loadDemoData();
+    return c.json(MOCK_AGENTS.map(reshapeAgent));
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.agents);
@@ -447,7 +456,11 @@ app.post("/api/agents", requireAuth, requireRole("builder"), requireDb, async (c
 
 // ─── INTENTS ───
 
-app.get("/api/intents", requireDb, async (c) => {
+app.get("/api/intents", async (c) => {
+  if (!isDbAvailable()) {
+    const { MOCK_INTENTS } = await loadDemoData();
+    return c.json(MOCK_INTENTS);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.intents);
@@ -479,7 +492,11 @@ app.post("/api/intents", requireAuth, requireRole("smb"), requireDb, async (c) =
 
 // ─── TRANSACTIONS ───
 
-app.get("/api/transactions", requireDb, async (c) => {
+app.get("/api/transactions", async (c) => {
+  if (!isDbAvailable()) {
+    const { TRANSACTIONS } = await loadDemoData();
+    return c.json(TRANSACTIONS);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.transactions);
@@ -492,7 +509,11 @@ app.get("/api/transactions", requireDb, async (c) => {
 
 // ─── SIGNALS (Live Auction Feed) ───
 
-app.get("/api/signals", requireDb, async (c) => {
+app.get("/api/signals", async (c) => {
+  if (!isDbAvailable()) {
+    const { LIVE_SIGNALS } = await loadDemoData();
+    return c.json(LIVE_SIGNALS);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.signals);
@@ -505,7 +526,11 @@ app.get("/api/signals", requireDb, async (c) => {
 
 // ─── JOBS ───
 
-app.get("/api/jobs", requireDb, async (c) => {
+app.get("/api/jobs", async (c) => {
+  if (!isDbAvailable()) {
+    const { MOCK_JOBS } = await loadDemoData();
+    return c.json(MOCK_JOBS);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.jobs);
@@ -558,7 +583,11 @@ app.post("/api/jobs", requireAuth, requireDb, async (c) => {
 
 // ─── ESCROW ───
 
-app.get("/api/escrow", requireDb, async (c) => {
+app.get("/api/escrow", async (c) => {
+  if (!isDbAvailable()) {
+    const { MOCK_ESCROW } = await loadDemoData();
+    return c.json(MOCK_ESCROW);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.escrow);
@@ -880,7 +909,11 @@ app.get("/api/stripe/status", (c) => {
 
 // ─── METRICS ───
 
-app.get("/api/metrics", requireDb, async (c) => {
+app.get("/api/metrics", async (c) => {
+  if (!isDbAvailable()) {
+    const { REVENUE_MONTHS } = await loadDemoData();
+    return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") {
     return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
@@ -895,7 +928,11 @@ app.get("/api/metrics", requireDb, async (c) => {
 
 // ─── INTENT MARKET ───
 
-app.get("/api/intent-market", requireDb, async (c) => {
+app.get("/api/intent-market", async (c) => {
+  if (!isDbAvailable()) {
+    const { INTENT_MARKET } = await loadDemoData();
+    return c.json(INTENT_MARKET);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") {
     const { INTENT_MARKET } = await loadDemoData();
@@ -911,7 +948,11 @@ app.get("/api/intent-market", requireDb, async (c) => {
 
 // ─── INTENT CATEGORIES ───
 
-app.get("/api/intent-categories", requireDb, async (c) => {
+app.get("/api/intent-categories", async (c) => {
+  if (!isDbAvailable()) {
+    const { INTENT_CATEGORIES } = await loadDemoData();
+    return c.json(INTENT_CATEGORIES);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.intentCategories);
@@ -924,7 +965,16 @@ app.get("/api/intent-categories", requireDb, async (c) => {
 
 // ─── SLA TEMPLATES ───
 
-app.get("/api/sla-templates", requireDb, async (c) => {
+app.get("/api/sla-templates", async (c) => {
+  if (!isDbAvailable()) {
+    const { SLA_TEMPLATES } = await loadDemoData();
+    const grouped = {};
+    for (const r of SLA_TEMPLATES) {
+      if (!grouped[r.vertical]) grouped[r.vertical] = [];
+      grouped[r.vertical].push(r);
+    }
+    return c.json(grouped);
+  }
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json({});
   const rows = await db.select().from(schema.slaTemplates);
