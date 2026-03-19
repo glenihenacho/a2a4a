@@ -3778,9 +3778,9 @@ function AgentDetailModal({ agent, mob, onClose }) {
             </div>
           )}
           {dtab === "policy" && (
-            <div style={{ display: "flex", gap: mob ? 0 : 20, flexDirection: mob ? "column" : "row" }}>
+            <div>
               {/* Policy content */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div>
                 <div
                   style={{
                     fontFamily: ft.mono,
@@ -3868,140 +3868,6 @@ function AgentDetailModal({ agent, mob, onClose }) {
                     </div>
                   </div>
                 )}
-              </div>
-              {/* Settings pane — visible adjacent to policy */}
-              <div
-                style={{
-                  width: mob ? "100%" : 240,
-                  flexShrink: 0,
-                  marginTop: mob ? 20 : 0,
-                  padding: 16,
-                  background: "rgba(255,255,255,.02)",
-                  border: "1px solid rgba(66,165,245,.08)",
-                  borderRadius: 10,
-                  alignSelf: "flex-start",
-                }}
-              >
-                <div
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "rgba(255,255,255,.35)",
-                    letterSpacing: ".1em",
-                    textTransform: "uppercase",
-                    marginBottom: 14,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  <span style={{ fontSize: 12 }}>⚙</span> Settings
-                </div>
-                {[
-                  { l: "Version", v: `v${agent.version}` },
-                  { l: "Status", v: agent.status, c: agent.status === "live" ? "#66BB6A" : "#FFA726" },
-                  { l: "Verticals", v: agent.verticals.join(", ") },
-                  { l: "Reputation", v: agent.stats.reputation > 0 ? `${agent.stats.reputation}/100` : "—" },
-                ].map((row, i) => (
-                  <div key={i} style={{ marginBottom: 12 }}>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 9,
-                        color: "rgba(255,255,255,.2)",
-                        letterSpacing: ".06em",
-                        textTransform: "uppercase",
-                        marginBottom: 3,
-                      }}
-                    >
-                      {row.l}
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: row.c || "rgba(255,255,255,.5)",
-                        textTransform: "capitalize",
-                      }}
-                    >
-                      {row.v}
-                    </div>
-                  </div>
-                ))}
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(66,165,245,.06)",
-                    paddingTop: 12,
-                    marginTop: 4,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 9,
-                      color: "rgba(255,255,255,.2)",
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Tool Allowlist
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    {agent.toolRequirements.map((t, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 10,
-                          color: "rgba(255,255,255,.3)",
-                          padding: "3px 7px",
-                          background: "rgba(66,165,245,.04)",
-                          border: "1px solid rgba(66,165,245,.06)",
-                          borderRadius: 4,
-                        }}
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    borderTop: "1px solid rgba(66,165,245,.06)",
-                    paddingTop: 12,
-                    marginTop: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 9,
-                      color: "rgba(255,255,255,.2)",
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
-                      marginBottom: 6,
-                    }}
-                  >
-                    SLA Params
-                  </div>
-                  {[
-                    { l: "P50 Latency", v: agent.sla.latencyP50 },
-                    { l: "P99 Latency", v: agent.sla.latencyP99 },
-                    { l: "Max Cost", v: agent.sla.maxCost },
-                  ].map((s, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                      <span style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>{s.l}</span>
-                      <span
-                        style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,.45)" }}
-                      >
-                        {s.v}
-                      </span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -5472,7 +5338,7 @@ function Agents({ mob, tab }) {
                       { l: "Success", v: `${agent.stats.successRate}%` },
                       {
                         l: "ROI",
-                        v: agent.monthlyRev ? `$${(agent.monthlyRev / 1000).toFixed(1)}K` : "—",
+                        v: agent.avgRoi ? `${agent.avgRoi}x` : "—",
                       },
                       { l: "Runtime", v: agent.stats.avgRuntime },
                       { l: "Active", v: agent.stats.activeContracts },
