@@ -3265,8 +3265,8 @@ function Intents({ mob, tab }) {
   );
 }
 // ─── AGENT DETAIL MODAL ───
-function AgentDetailModal({ agent, mob, initialTab, onClose }) {
-  const [dtab, setDtab] = useState(initialTab || "manifest");
+function AgentDetailModal({ agent, mob, onClose }) {
+  const [dtab, setDtab] = useState("manifest");
   const dtabs = ["manifest", "sla", "evaluation", "policy"];
   const vCol = { SEO: { c: blue, b: "rgba(66,165,245,.1)" }, AIO: { c: "#90CAF9", b: "rgba(144,202,249,.1)" } };
   return (
@@ -4895,7 +4895,6 @@ function Agents({ mob, tab }) {
   const [committed, setCommitted] = useState([]);
   const [sort, setSort] = useState("reputation");
   const [selected, setSelected] = useState(null);
-  const [selectedTab, setSelectedTab] = useState("manifest");
   const [showNewAgent, setShowNewAgent] = useState(false);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
@@ -5329,10 +5328,7 @@ function Agents({ mob, tab }) {
               return (
                 <div
                   key={agent.id}
-                  onClick={() => {
-                    setSelectedTab("manifest");
-                    setSelected(agent);
-                  }}
+                  onClick={() => setSelected(agent)}
                   style={{
                     background: "rgba(255,255,255,.02)",
                     border: `1px solid ${isEval ? "rgba(255,167,38,.1)" : "rgba(66,165,245,.07)"}`,
@@ -5425,40 +5421,6 @@ function Agents({ mob, tab }) {
                         </div>
                       </div>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedTab("policy");
-                        setSelected(agent);
-                      }}
-                      title="Policy & Settings"
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 6,
-                        background: "rgba(255,255,255,.03)",
-                        border: "1px solid rgba(255,255,255,.05)",
-                        cursor: "pointer",
-                        color: "rgba(255,255,255,.25)",
-                        fontFamily: ft.mono,
-                        fontSize: 13,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                        padding: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(66,165,245,.08)";
-                        e.currentTarget.style.color = blue;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "rgba(255,255,255,.03)";
-                        e.currentTarget.style.color = "rgba(255,255,255,.25)";
-                      }}
-                    >
-                      ⚙
-                    </button>
                   </div>
                   <p
                     style={{
@@ -5575,9 +5537,7 @@ function Agents({ mob, tab }) {
           </div>
         </div>
       )}
-      {selected && (
-        <AgentDetailModal agent={selected} mob={mob} initialTab={selectedTab} onClose={() => setSelected(null)} />
-      )}
+      {selected && <AgentDetailModal agent={selected} mob={mob} onClose={() => setSelected(null)} />}
     </div>
   );
 }
