@@ -3265,8 +3265,8 @@ function Intents({ mob, tab }) {
   );
 }
 // ─── AGENT DETAIL MODAL ───
-function AgentDetailModal({ agent, mob, onClose }) {
-  const [dtab, setDtab] = useState("manifest");
+function AgentDetailModal({ agent, mob, initialTab, onClose }) {
+  const [dtab, setDtab] = useState(initialTab || "manifest");
   const dtabs = ["manifest", "sla", "evaluation", "policy"];
   const vCol = { SEO: { c: blue, b: "rgba(66,165,245,.1)" }, AIO: { c: "#90CAF9", b: "rgba(144,202,249,.1)" } };
   return (
@@ -4758,6 +4758,7 @@ function Agents({ mob, tab }) {
   const [committed, setCommitted] = useState([]);
   const [sort, setSort] = useState("reputation");
   const [selected, setSelected] = useState(null);
+  const [selectedTab, setSelectedTab] = useState("manifest");
   const [showNewAgent, setShowNewAgent] = useState(false);
   const [focused, setFocused] = useState(false);
   const inputRef = useRef(null);
@@ -4831,6 +4832,8 @@ function Agents({ mob, tab }) {
   const totalCaps = MOCK_AGENTS.reduce((s, a) => s + a.capabilities.length, 0);
   const verifiedCount = MOCK_AGENTS.filter((a) => a.verified).length;
   const liveCount = MOCK_AGENTS.filter((a) => a.status === "live").length;
+  const evalCount = MOCK_AGENTS.filter((a) => a.status === "evaluation").length;
+  const totalVerticals = new Set(MOCK_AGENTS.flatMap((a) => a.verticals)).size;
   const avgRep = Math.round(
     MOCK_AGENTS.filter((a) => a.stats.reputation > 0).reduce((s, a) => s + a.stats.reputation, 0) /
       MOCK_AGENTS.filter((a) => a.stats.reputation > 0).length,
@@ -4893,10 +4896,10 @@ function Agents({ mob, tab }) {
             {[
               { l: "Registered", v: MOCK_AGENTS.length, c: blue },
               { l: "Live", v: liveCount, c: "#66BB6A" },
-              { l: "In Evaluation", v: MOCK_AGENTS.length - liveCount, c: "#FFA726" },
+              { l: "Verticals", v: totalVerticals, c: "#FFA726" },
               { l: "Capabilities", v: totalCaps, c: "#64B5F6" },
-              { l: "Verified", v: `${verifiedCount}/${MOCK_AGENTS.length}`, c: "#66BB6A" },
-              { l: "Avg Reputation", v: avgRep, c: blue },
+              { l: "Evaluating", v: evalCount, c: "#66BB6A" },
+              { l: "Reputation", v: avgRep, c: blue },
             ].map((k, i) => (
               <div
                 key={i}
@@ -5189,7 +5192,10 @@ function Agents({ mob, tab }) {
               return (
                 <div
                   key={agent.id}
-                  onClick={() => setSelected(agent)}
+                  onClick={() => {
+                    setSelectedTab("manifest");
+                    setSelected(agent);
+                  }}
                   style={{
                     background: "rgba(255,255,255,.02)",
                     border: `1px solid ${isEval ? "rgba(255,167,38,.1)" : "rgba(66,165,245,.07)"}`,
@@ -5285,18 +5291,20 @@ function Agents({ mob, tab }) {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSelectedTab("policy");
                         setSelected(agent);
                       }}
+                      title="Policy"
                       style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 6,
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
                         background: "rgba(255,255,255,.03)",
                         border: "1px solid rgba(255,255,255,.05)",
                         cursor: "pointer",
                         color: "rgba(255,255,255,.25)",
                         fontFamily: ft.mono,
-                        fontSize: 13,
+                        fontSize: 14,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -5304,15 +5312,30 @@ function Agents({ mob, tab }) {
                         padding: 0,
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(66,165,245,.08)";
+                        e.currentTarget.style.background = "rgba(66,165,245,.1)";
+                        e.currentTarget.style.borderColor = "rgba(66,165,245,.2)";
                         e.currentTarget.style.color = blue;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "rgba(255,255,255,.03)";
+                        e.currentTarget.style.borderColor = "rgba(255,255,255,.05)";
                         e.currentTarget.style.color = "rgba(255,255,255,.25)";
                       }}
                     >
-                      ⚙
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                      >
+                        <rect x="2" y="2" width="12" height="12" rx="2" />
+                        <line x1="6" y1="2" x2="6" y2="14" />
+                        <line x1="6" y1="6" x2="14" y2="6" />
+                        <line x1="6" y1="10" x2="14" y2="10" />
+                      </svg>
                     </button>
                   </div>
                   <p
@@ -5365,7 +5388,7 @@ function Agents({ mob, tab }) {
                       { l: "Success", v: `${agent.stats.successRate}%` },
                       {
                         l: "ROI",
-                        v: agent.stats.successRate >= 90 ? "High" : agent.stats.successRate >= 80 ? "Med" : "Low",
+                        v: agent.monthlyRev ? `$${(agent.monthlyRev / 1000).toFixed(1)}K` : "—",
                       },
                       { l: "Runtime", v: agent.stats.avgRuntime },
                       { l: "Active", v: agent.stats.activeContracts },
@@ -5430,7 +5453,9 @@ function Agents({ mob, tab }) {
           </div>
         </div>
       )}
-      {selected && <AgentDetailModal agent={selected} mob={mob} onClose={() => setSelected(null)} />}
+      {selected && (
+        <AgentDetailModal agent={selected} mob={mob} initialTab={selectedTab} onClose={() => setSelected(null)} />
+      )}
     </div>
   );
 }
