@@ -183,6 +183,7 @@ const agentSchema = z.object({
   activeContracts: z.number().int().min(0).optional(),
   reputation: z.number().int().min(0).max(100).optional(),
   monthlyRev: z.number().int().min(0).optional(),
+  avgRoi: z.number().min(0).optional(),
   wins: z.number().int().min(0).optional(),
 });
 
@@ -399,7 +400,7 @@ function reshapeAgent(r) {
     capabilities: r.capabilities, inputSchema: r.inputSchema, outputSchema: r.outputSchema,
     toolRequirements: r.toolRequirements, sla: r.sla, policy: r.policy, evalClaims: r.evalClaims,
     stats: { totalRuns: r.totalRuns, successRate: r.successRate, avgRuntime: r.avgRuntime, avgCost: r.avgCost, activeContracts: r.activeContracts, reputation: r.reputation },
-    monthlyRev: r.monthlyRev, wins: r.wins,
+    monthlyRev: r.monthlyRev, avgRoi: r.avgRoi, wins: r.wins,
   };
 }
 

@@ -3779,93 +3779,96 @@ function AgentDetailModal({ agent, mob, onClose }) {
           )}
           {dtab === "policy" && (
             <div>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#EF5350",
-                  letterSpacing: ".08em",
-                  marginBottom: 10,
-                }}
-              >
-                DISALLOWED ACTIONS
-              </div>
-              <div style={{ display: "grid", gap: 5, marginBottom: 20 }}>
-                {agent.policy.disallowed.map((d, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      alignItems: "center",
-                      padding: "9px 12px",
-                      background: "rgba(239,83,80,.02)",
-                      borderRadius: 7,
-                      border: "1px solid rgba(239,83,80,.06)",
-                    }}
-                  >
-                    <span style={{ fontFamily: ft.mono, fontSize: 12, color: "#EF5350" }}>⊘</span>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{d}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 14 }}>
-                <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: blue,
-                      letterSpacing: ".08em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    DATA RETENTION
-                  </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.dataRetention}</div>
-                </div>
-                <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "#AB47BC",
-                      letterSpacing: ".08em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    SANDBOX
-                  </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.sandbox}</div>
-                </div>
-              </div>
-              {agent.signedAt && (
+              {/* Policy content */}
+              <div>
                 <div
                   style={{
-                    marginTop: 16,
-                    padding: 12,
-                    background: "rgba(102,187,106,.03)",
-                    border: "1px solid rgba(102,187,106,.08)",
-                    borderRadius: 8,
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "center",
+                    fontFamily: ft.mono,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "#EF5350",
+                    letterSpacing: ".08em",
+                    marginBottom: 10,
                   }}
                 >
-                  <span style={{ fontSize: 14 }}>🔐</span>
-                  <div>
-                    <div style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "#66BB6A" }}>
-                      MANIFEST SIGNED
+                  DISALLOWED ACTIONS
+                </div>
+                <div style={{ display: "grid", gap: 5, marginBottom: 20 }}>
+                  {agent.policy.disallowed.map((d, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: "9px 12px",
+                        background: "rgba(239,83,80,.02)",
+                        borderRadius: 7,
+                        border: "1px solid rgba(239,83,80,.06)",
+                      }}
+                    >
+                      <span style={{ fontFamily: ft.mono, fontSize: 12, color: "#EF5350" }}>⊘</span>
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{d}</span>
                     </div>
-                    <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.22)" }}>
-                      {new Date(agent.signedAt).toUTCString()}
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 14 }}>
+                  <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: blue,
+                        letterSpacing: ".08em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      DATA RETENTION
                     </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.dataRetention}</div>
+                  </div>
+                  <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "#AB47BC",
+                        letterSpacing: ".08em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      SANDBOX
+                    </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.sandbox}</div>
                   </div>
                 </div>
-              )}
+                {agent.signedAt && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      padding: 12,
+                      background: "rgba(102,187,106,.03)",
+                      border: "1px solid rgba(102,187,106,.08)",
+                      borderRadius: 8,
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>🔐</span>
+                    <div>
+                      <div style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "#66BB6A" }}>
+                        MANIFEST SIGNED
+                      </div>
+                      <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.22)" }}>
+                        {new Date(agent.signedAt).toUTCString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -4831,6 +4834,8 @@ function Agents({ mob, tab }) {
   const totalCaps = MOCK_AGENTS.reduce((s, a) => s + a.capabilities.length, 0);
   const verifiedCount = MOCK_AGENTS.filter((a) => a.verified).length;
   const liveCount = MOCK_AGENTS.filter((a) => a.status === "live").length;
+  const evalCount = MOCK_AGENTS.filter((a) => a.status === "evaluation").length;
+  const totalVerticals = new Set(MOCK_AGENTS.flatMap((a) => a.verticals)).size;
   const avgRep = Math.round(
     MOCK_AGENTS.filter((a) => a.stats.reputation > 0).reduce((s, a) => s + a.stats.reputation, 0) /
       MOCK_AGENTS.filter((a) => a.stats.reputation > 0).length,
@@ -4893,10 +4898,10 @@ function Agents({ mob, tab }) {
             {[
               { l: "Registered", v: MOCK_AGENTS.length, c: blue },
               { l: "Live", v: liveCount, c: "#66BB6A" },
-              { l: "In Evaluation", v: MOCK_AGENTS.length - liveCount, c: "#FFA726" },
+              { l: "Verticals", v: totalVerticals, c: "#FFA726" },
               { l: "Capabilities", v: totalCaps, c: "#64B5F6" },
-              { l: "Verified", v: `${verifiedCount}/${MOCK_AGENTS.length}`, c: "#66BB6A" },
-              { l: "Avg Reputation", v: avgRep, c: blue },
+              { l: "Evaluating", v: evalCount, c: "#66BB6A" },
+              { l: "Reputation", v: avgRep, c: blue },
             ].map((k, i) => (
               <div
                 key={i}
@@ -5282,38 +5287,6 @@ function Agents({ mob, tab }) {
                         </div>
                       </div>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelected(agent);
-                      }}
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: 6,
-                        background: "rgba(255,255,255,.03)",
-                        border: "1px solid rgba(255,255,255,.05)",
-                        cursor: "pointer",
-                        color: "rgba(255,255,255,.25)",
-                        fontFamily: ft.mono,
-                        fontSize: 13,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                        padding: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(66,165,245,.08)";
-                        e.currentTarget.style.color = blue;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "rgba(255,255,255,.03)";
-                        e.currentTarget.style.color = "rgba(255,255,255,.25)";
-                      }}
-                    >
-                      ⚙
-                    </button>
                   </div>
                   <p
                     style={{
@@ -5365,7 +5338,7 @@ function Agents({ mob, tab }) {
                       { l: "Success", v: `${agent.stats.successRate}%` },
                       {
                         l: "ROI",
-                        v: agent.stats.successRate >= 90 ? "High" : agent.stats.successRate >= 80 ? "Med" : "Low",
+                        v: agent.avgRoi ? `${agent.avgRoi}x` : "—",
                       },
                       { l: "Runtime", v: agent.stats.avgRuntime },
                       { l: "Active", v: agent.stats.activeContracts },

@@ -166,6 +166,7 @@ export const agents = pgTable("agents", {
   activeContracts: integer("active_contracts").default(0).notNull(),
   reputation: integer("reputation").default(0).notNull(),
   monthlyRev: integer("monthly_rev").default(0).notNull(),
+  avgRoi: real("avg_roi").default(0).notNull(),
   wins: integer("wins").default(0).notNull(),
   stripeAccountId: varchar("stripe_account_id", { length: 64 }),
   createdAt: timestamp("created_at", { withTimezone: true })

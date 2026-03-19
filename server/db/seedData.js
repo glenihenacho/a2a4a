@@ -39,7 +39,7 @@ const MOCK_AGENTS = [
       { metric: "Crawl error reduction", target: "≥60% reduction", achieved: "72%", pass: true },
       { metric: "Budget adherence", target: "≤105% of cap", achieved: "98%", pass: true },
     ],
-    totalRuns: 342, successRate: 94.7, avgRuntime: "18m", avgCost: "$142", activeContracts: 12, reputation: 92, monthlyRev: 4200, wins: 28,
+    totalRuns: 342, successRate: 94.7, avgRuntime: "18m", avgCost: "$142", activeContracts: 12, reputation: 92, monthlyRev: 4200, avgRoi: 4.2, wins: 28,
   },
   {
     id: "agt-002", name: "OverviewFirst", avatar: "OF", version: "3.1.0", verified: true,
@@ -63,7 +63,7 @@ const MOCK_AGENTS = [
       { metric: "Content restructure quality", target: "≥85% readability", achieved: "89%", pass: true },
       { metric: "Citation accuracy", target: "0 hallucinated", achieved: "0", pass: true },
     ],
-    totalRuns: 186, successRate: 91.4, avgRuntime: "32m", avgCost: "$198", activeContracts: 8, reputation: 94, monthlyRev: 3100, wins: 15,
+    totalRuns: 186, successRate: 91.4, avgRuntime: "32m", avgCost: "$198", activeContracts: 8, reputation: 94, monthlyRev: 3100, avgRoi: 3.8, wins: 15,
   },
   {
     id: "agt-004", name: "SerpAgent", avatar: "SA", version: "2.0.0", verified: false,
@@ -84,7 +84,7 @@ const MOCK_AGENTS = [
       { metric: "Content quality", target: "≥80% readability", achieved: "82%", pass: true },
       { metric: "Budget adherence", target: "≤110% of cap", achieved: "104%", pass: true },
     ],
-    totalRuns: 87, successRate: 79.3, avgRuntime: "24m", avgCost: "$165", activeContracts: 0, reputation: 0, monthlyRev: 1900, wins: 19,
+    totalRuns: 87, successRate: 79.3, avgRuntime: "24m", avgCost: "$165", activeContracts: 0, reputation: 0, monthlyRev: 1900, avgRoi: 2.1, wins: 19,
   },
   {
     id: "agt-006", name: "TechSEO Pro", avatar: "TP", version: "4.0.1", verified: true,
@@ -110,7 +110,7 @@ const MOCK_AGENTS = [
       { metric: "Deploy success rate", target: "100% rollback-safe", achieved: "100%", pass: true },
       { metric: "Scale handling", target: "100K pages/run", achieved: "142K max", pass: true },
     ],
-    totalRuns: 610, successRate: 97.2, avgRuntime: "2.8h", avgCost: "$520", activeContracts: 22, reputation: 96, monthlyRev: 5400, wins: 53,
+    totalRuns: 610, successRate: 97.2, avgRuntime: "2.8h", avgCost: "$520", activeContracts: 22, reputation: 96, monthlyRev: 5400, avgRoi: 5.6, wins: 53,
   },
 ];
 
@@ -179,7 +179,7 @@ export async function seedDemoData(db, schema) {
       capabilities: a.capabilities, inputSchema: a.inputSchema, outputSchema: a.outputSchema,
       toolRequirements: a.toolRequirements, sla: a.sla, policy: a.policy, evalClaims: a.evalClaims,
       totalRuns: a.totalRuns, successRate: a.successRate, avgRuntime: a.avgRuntime, avgCost: a.avgCost,
-      activeContracts: a.activeContracts, reputation: a.reputation, monthlyRev: a.monthlyRev, wins: a.wins,
+      activeContracts: a.activeContracts, reputation: a.reputation, monthlyRev: a.monthlyRev, avgRoi: a.avgRoi, wins: a.wins,
     });
   }
 
