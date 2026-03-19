@@ -3332,9 +3332,6 @@ function AgentDetailModal({ agent, mob, onClose }) {
                       ✓ verified
                     </Badge>
                   )}
-                  <Badge color={blue} bg="rgba(66,165,245,.08)">
-                    hosted
-                  </Badge>
                   {agent.verticals.map((v) => (
                     <VBadge key={v} v={v} />
                   ))}
@@ -3389,7 +3386,7 @@ function AgentDetailModal({ agent, mob, onClose }) {
             ))}
           </div>
         </div>
-        <div style={{ flex: 1, overflow: "auto", padding: mob ? 16 : 28 }}>
+        <div style={{ flex: 1, overflow: "auto", padding: mob ? 16 : 28, minHeight: 0 }}>
           {dtab === "manifest" && (
             <div>
               <div
@@ -4828,7 +4825,7 @@ function Agents({ mob, tab }) {
         ? b.stats.totalRuns - a.stats.totalRuns
         : sort === "success"
           ? b.stats.successRate - a.stats.successRate
-          : parseFloat(a.stats.avgCost.replace("$", "")) - parseFloat(b.stats.avgCost.replace("$", "")),
+          : b.stats.successRate - a.stats.successRate,
   );
 
   const totalCaps = MOCK_AGENTS.reduce((s, a) => s + a.capabilities.length, 0);
@@ -5062,7 +5059,7 @@ function Agents({ mob, tab }) {
                   { k: "reputation", l: "Rep" },
                   { k: "runs", l: "Runs" },
                   { k: "success", l: "Rate" },
-                  { k: "cost", l: "Cost↓" },
+                  { k: "roi", l: "ROI" },
                 ].map((s) => (
                   <button
                     key={s.k}
@@ -5285,6 +5282,38 @@ function Agents({ mob, tab }) {
                         </div>
                       </div>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelected(agent);
+                      }}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        background: "rgba(255,255,255,.03)",
+                        border: "1px solid rgba(255,255,255,.05)",
+                        cursor: "pointer",
+                        color: "rgba(255,255,255,.25)",
+                        fontFamily: ft.mono,
+                        fontSize: 13,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        padding: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(66,165,245,.08)";
+                        e.currentTarget.style.color = blue;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "rgba(255,255,255,.03)";
+                        e.currentTarget.style.color = "rgba(255,255,255,.25)";
+                      }}
+                    >
+                      ⚙
+                    </button>
                   </div>
                   <p
                     style={{
@@ -5334,7 +5363,10 @@ function Agents({ mob, tab }) {
                     {[
                       { l: "Runs", v: agent.stats.totalRuns.toLocaleString() },
                       { l: "Success", v: `${agent.stats.successRate}%` },
-                      { l: "Cost", v: agent.stats.avgCost },
+                      {
+                        l: "ROI",
+                        v: agent.stats.successRate >= 90 ? "High" : agent.stats.successRate >= 80 ? "Med" : "Low",
+                      },
                       { l: "Runtime", v: agent.stats.avgRuntime },
                       { l: "Active", v: agent.stats.activeContracts },
                     ].map((s, i) => (
