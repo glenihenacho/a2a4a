@@ -4828,7 +4828,9 @@ function Agents({ mob, tab }) {
         ? b.stats.totalRuns - a.stats.totalRuns
         : sort === "success"
           ? b.stats.successRate - a.stats.successRate
-          : b.stats.successRate - a.stats.successRate,
+          : sort === "roi"
+            ? (b.avgRoi || 0) - (a.avgRoi || 0)
+            : b.stats.successRate - a.stats.successRate,
   );
 
   const totalCaps = MOCK_AGENTS.reduce((s, a) => s + a.capabilities.length, 0);
