@@ -410,10 +410,7 @@ function reshapeAgent(r) {
 }
 
 app.get("/api/agents", async (c) => {
-  if (!isDbAvailable()) {
-    const { MOCK_AGENTS } = await loadDemoData();
-    return c.json(MOCK_AGENTS.map(reshapeAgent));
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.agents);
@@ -457,10 +454,7 @@ app.post("/api/agents", requireAuth, requireRole("builder"), requireDb, async (c
 // ─── INTENTS ───
 
 app.get("/api/intents", async (c) => {
-  if (!isDbAvailable()) {
-    const { MOCK_INTENTS } = await loadDemoData();
-    return c.json(MOCK_INTENTS);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.intents);
@@ -493,10 +487,7 @@ app.post("/api/intents", requireAuth, requireRole("smb"), requireDb, async (c) =
 // ─── TRANSACTIONS ───
 
 app.get("/api/transactions", async (c) => {
-  if (!isDbAvailable()) {
-    const { TRANSACTIONS } = await loadDemoData();
-    return c.json(TRANSACTIONS);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.transactions);
@@ -510,10 +501,7 @@ app.get("/api/transactions", async (c) => {
 // ─── SIGNALS (Live Auction Feed) ───
 
 app.get("/api/signals", async (c) => {
-  if (!isDbAvailable()) {
-    const { LIVE_SIGNALS } = await loadDemoData();
-    return c.json(LIVE_SIGNALS);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.signals);
@@ -527,10 +515,7 @@ app.get("/api/signals", async (c) => {
 // ─── JOBS ───
 
 app.get("/api/jobs", async (c) => {
-  if (!isDbAvailable()) {
-    const { MOCK_JOBS } = await loadDemoData();
-    return c.json(MOCK_JOBS);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.jobs);
@@ -584,10 +569,7 @@ app.post("/api/jobs", requireAuth, requireDb, async (c) => {
 // ─── ESCROW ───
 
 app.get("/api/escrow", async (c) => {
-  if (!isDbAvailable()) {
-    const { MOCK_ESCROW } = await loadDemoData();
-    return c.json(MOCK_ESCROW);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.escrow);
@@ -910,10 +892,7 @@ app.get("/api/stripe/status", (c) => {
 // ─── METRICS ───
 
 app.get("/api/metrics", async (c) => {
-  if (!isDbAvailable()) {
-    const { REVENUE_MONTHS } = await loadDemoData();
-    return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
-  }
+  if (!isDbAvailable()) return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
   const scope = await getDemoScope(c);
   if (scope === "market") {
     return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
@@ -929,10 +908,7 @@ app.get("/api/metrics", async (c) => {
 // ─── INTENT MARKET ───
 
 app.get("/api/intent-market", async (c) => {
-  if (!isDbAvailable()) {
-    const { INTENT_MARKET } = await loadDemoData();
-    return c.json(INTENT_MARKET);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") {
     const { INTENT_MARKET } = await loadDemoData();
@@ -949,10 +925,7 @@ app.get("/api/intent-market", async (c) => {
 // ─── INTENT CATEGORIES ───
 
 app.get("/api/intent-categories", async (c) => {
-  if (!isDbAvailable()) {
-    const { INTENT_CATEGORIES } = await loadDemoData();
-    return c.json(INTENT_CATEGORIES);
-  }
+  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
   const rows = await db.select().from(schema.intentCategories);
@@ -966,15 +939,7 @@ app.get("/api/intent-categories", async (c) => {
 // ─── SLA TEMPLATES ───
 
 app.get("/api/sla-templates", async (c) => {
-  if (!isDbAvailable()) {
-    const { SLA_TEMPLATES } = await loadDemoData();
-    const grouped = {};
-    for (const r of SLA_TEMPLATES) {
-      if (!grouped[r.vertical]) grouped[r.vertical] = [];
-      grouped[r.vertical].push(r);
-    }
-    return c.json(grouped);
-  }
+  if (!isDbAvailable()) return c.json({});
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json({});
   const rows = await db.select().from(schema.slaTemplates);

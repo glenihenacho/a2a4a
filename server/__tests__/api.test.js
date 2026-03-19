@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import app from "../index.js";
 
 // These tests run against the Hono app directly (no DB, no network).
-// Most data routes return 503 since DATABASE_URL is not set in test env.
+// List routes return empty data without DB — demo data is only for demo accounts.
 
 describe("API routes (no DB)", () => {
   it("GET /api/health returns degraded without DB (non-production)", async () => {
@@ -15,36 +15,46 @@ describe("API routes (no DB)", () => {
     expect(body.timestamp).toBeDefined();
   });
 
-  it("GET /api/agents returns 503 without DB", async () => {
+  it("GET /api/agents returns empty array without DB", async () => {
     const res = await app.request("/api/agents");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toBe("Database unavailable");
+    expect(body).toEqual([]);
   });
 
-  it("GET /api/intents returns 503 without DB", async () => {
+  it("GET /api/intents returns empty array without DB", async () => {
     const res = await app.request("/api/intents");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
   });
 
-  it("GET /api/transactions returns 503 without DB", async () => {
+  it("GET /api/transactions returns empty array without DB", async () => {
     const res = await app.request("/api/transactions");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
   });
 
-  it("GET /api/signals returns 503 without DB", async () => {
+  it("GET /api/signals returns empty array without DB", async () => {
     const res = await app.request("/api/signals");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
   });
 
-  it("GET /api/jobs returns 503 without DB", async () => {
+  it("GET /api/jobs returns empty array without DB", async () => {
     const res = await app.request("/api/jobs");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
   });
 
-  it("GET /api/escrow returns 503 without DB", async () => {
+  it("GET /api/escrow returns empty array without DB", async () => {
     const res = await app.request("/api/escrow");
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
   });
 
   // Static config routes should work without DB
