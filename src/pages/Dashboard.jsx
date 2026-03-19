@@ -3778,94 +3778,231 @@ function AgentDetailModal({ agent, mob, initialTab, onClose }) {
             </div>
           )}
           {dtab === "policy" && (
-            <div>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "#EF5350",
-                  letterSpacing: ".08em",
-                  marginBottom: 10,
-                }}
-              >
-                DISALLOWED ACTIONS
-              </div>
-              <div style={{ display: "grid", gap: 5, marginBottom: 20 }}>
-                {agent.policy.disallowed.map((d, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      gap: 8,
-                      alignItems: "center",
-                      padding: "9px 12px",
-                      background: "rgba(239,83,80,.02)",
-                      borderRadius: 7,
-                      border: "1px solid rgba(239,83,80,.06)",
-                    }}
-                  >
-                    <span style={{ fontFamily: ft.mono, fontSize: 12, color: "#EF5350" }}>⊘</span>
-                    <span style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{d}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 14 }}>
-                <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: blue,
-                      letterSpacing: ".08em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    DATA RETENTION
-                  </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.dataRetention}</div>
-                </div>
-                <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "#AB47BC",
-                      letterSpacing: ".08em",
-                      marginBottom: 6,
-                    }}
-                  >
-                    SANDBOX
-                  </div>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.sandbox}</div>
-                </div>
-              </div>
-              {agent.signedAt && (
+            <div style={{ display: "flex", gap: mob ? 0 : 20, flexDirection: mob ? "column" : "row" }}>
+              {/* Policy content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
-                    marginTop: 16,
-                    padding: 12,
-                    background: "rgba(102,187,106,.03)",
-                    border: "1px solid rgba(102,187,106,.08)",
-                    borderRadius: 8,
-                    display: "flex",
-                    gap: 10,
-                    alignItems: "center",
+                    fontFamily: ft.mono,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "#EF5350",
+                    letterSpacing: ".08em",
+                    marginBottom: 10,
                   }}
                 >
-                  <span style={{ fontSize: 14 }}>🔐</span>
-                  <div>
-                    <div style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "#66BB6A" }}>
-                      MANIFEST SIGNED
+                  DISALLOWED ACTIONS
+                </div>
+                <div style={{ display: "grid", gap: 5, marginBottom: 20 }}>
+                  {agent.policy.disallowed.map((d, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: "9px 12px",
+                        background: "rgba(239,83,80,.02)",
+                        borderRadius: 7,
+                        border: "1px solid rgba(239,83,80,.06)",
+                      }}
+                    >
+                      <span style={{ fontFamily: ft.mono, fontSize: 12, color: "#EF5350" }}>⊘</span>
+                      <span style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{d}</span>
                     </div>
-                    <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.22)" }}>
-                      {new Date(agent.signedAt).toUTCString()}
+                  ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 14 }}>
+                  <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: blue,
+                        letterSpacing: ".08em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      DATA RETENTION
                     </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.dataRetention}</div>
+                  </div>
+                  <div style={{ padding: 14, background: "rgba(255,255,255,.015)", borderRadius: 8 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: "#AB47BC",
+                        letterSpacing: ".08em",
+                        marginBottom: 6,
+                      }}
+                    >
+                      SANDBOX
+                    </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.4)" }}>{agent.policy.sandbox}</div>
                   </div>
                 </div>
-              )}
+                {agent.signedAt && (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      padding: 12,
+                      background: "rgba(102,187,106,.03)",
+                      border: "1px solid rgba(102,187,106,.08)",
+                      borderRadius: 8,
+                      display: "flex",
+                      gap: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>🔐</span>
+                    <div>
+                      <div style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "#66BB6A" }}>
+                        MANIFEST SIGNED
+                      </div>
+                      <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.22)" }}>
+                        {new Date(agent.signedAt).toUTCString()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {/* Settings pane — visible adjacent to policy */}
+              <div
+                style={{
+                  width: mob ? "100%" : 240,
+                  flexShrink: 0,
+                  marginTop: mob ? 20 : 0,
+                  padding: 16,
+                  background: "rgba(255,255,255,.02)",
+                  border: "1px solid rgba(66,165,245,.08)",
+                  borderRadius: 10,
+                  alignSelf: "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,.35)",
+                    letterSpacing: ".1em",
+                    textTransform: "uppercase",
+                    marginBottom: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 12 }}>⚙</span> Settings
+                </div>
+                {[
+                  { l: "Version", v: `v${agent.version}` },
+                  { l: "Status", v: agent.status, c: agent.status === "live" ? "#66BB6A" : "#FFA726" },
+                  { l: "Verticals", v: agent.verticals.join(", ") },
+                  { l: "Reputation", v: agent.stats.reputation > 0 ? `${agent.stats.reputation}/100` : "—" },
+                ].map((row, i) => (
+                  <div key={i} style={{ marginBottom: 12 }}>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 9,
+                        color: "rgba(255,255,255,.2)",
+                        letterSpacing: ".06em",
+                        textTransform: "uppercase",
+                        marginBottom: 3,
+                      }}
+                    >
+                      {row.l}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: row.c || "rgba(255,255,255,.5)",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {row.v}
+                    </div>
+                  </div>
+                ))}
+                <div
+                  style={{
+                    borderTop: "1px solid rgba(66,165,245,.06)",
+                    paddingTop: 12,
+                    marginTop: 4,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      color: "rgba(255,255,255,.2)",
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      marginBottom: 6,
+                    }}
+                  >
+                    Tool Allowlist
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {agent.toolRequirements.map((t, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 10,
+                          color: "rgba(255,255,255,.3)",
+                          padding: "3px 7px",
+                          background: "rgba(66,165,245,.04)",
+                          border: "1px solid rgba(66,165,245,.06)",
+                          borderRadius: 4,
+                        }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    borderTop: "1px solid rgba(66,165,245,.06)",
+                    paddingTop: 12,
+                    marginTop: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      color: "rgba(255,255,255,.2)",
+                      letterSpacing: ".06em",
+                      textTransform: "uppercase",
+                      marginBottom: 6,
+                    }}
+                  >
+                    SLA Params
+                  </div>
+                  {[
+                    { l: "P50 Latency", v: agent.sla.latencyP50 },
+                    { l: "P99 Latency", v: agent.sla.latencyP99 },
+                    { l: "Max Cost", v: agent.sla.maxCost },
+                  ].map((s, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>{s.l}</span>
+                      <span
+                        style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,.45)" }}
+                      >
+                        {s.v}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -5294,17 +5431,17 @@ function Agents({ mob, tab }) {
                         setSelectedTab("policy");
                         setSelected(agent);
                       }}
-                      title="Policy"
+                      title="Policy & Settings"
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 8,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
                         background: "rgba(255,255,255,.03)",
                         border: "1px solid rgba(255,255,255,.05)",
                         cursor: "pointer",
                         color: "rgba(255,255,255,.25)",
                         fontFamily: ft.mono,
-                        fontSize: 14,
+                        fontSize: 13,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -5312,30 +5449,15 @@ function Agents({ mob, tab }) {
                         padding: 0,
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(66,165,245,.1)";
-                        e.currentTarget.style.borderColor = "rgba(66,165,245,.2)";
+                        e.currentTarget.style.background = "rgba(66,165,245,.08)";
                         e.currentTarget.style.color = blue;
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = "rgba(255,255,255,.03)";
-                        e.currentTarget.style.borderColor = "rgba(255,255,255,.05)";
                         e.currentTarget.style.color = "rgba(255,255,255,.25)";
                       }}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                      >
-                        <rect x="2" y="2" width="12" height="12" rx="2" />
-                        <line x1="6" y1="2" x2="6" y2="14" />
-                        <line x1="6" y1="6" x2="14" y2="6" />
-                        <line x1="6" y1="10" x2="14" y2="10" />
-                      </svg>
+                      ⚙
                     </button>
                   </div>
                   <p
