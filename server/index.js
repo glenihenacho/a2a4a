@@ -410,15 +410,30 @@ function reshapeAgent(r) {
 }
 
 app.get("/api/agents", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.agents);
-  if (rows.length === 0 && scope === "full") {
-    const { MOCK_AGENTS } = await loadDemoData();
-    return c.json(MOCK_AGENTS.map(reshapeAgent));
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { MOCK_AGENTS } = await loadDemoData();
+      return c.json(MOCK_AGENTS.map(reshapeAgent));
+    }
+    return c.json([]);
   }
-  return c.json(rows.map(reshapeAgent));
+  try {
+    const rows = await db.select().from(schema.agents);
+    if (rows.length === 0 && scope === "full") {
+      const { MOCK_AGENTS } = await loadDemoData();
+      return c.json(MOCK_AGENTS.map(reshapeAgent));
+    }
+    return c.json(rows.map(reshapeAgent));
+  } catch (err) {
+    log.warn("GET /api/agents query failed", { error: err.message });
+    if (scope === "full") {
+      const { MOCK_AGENTS } = await loadDemoData();
+      return c.json(MOCK_AGENTS.map(reshapeAgent));
+    }
+    return c.json([]);
+  }
 });
 
 app.get("/api/agents/:id", requireDb, async (c) => {
@@ -454,15 +469,30 @@ app.post("/api/agents", requireAuth, requireRole("builder"), requireDb, async (c
 // ─── INTENTS ───
 
 app.get("/api/intents", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.intents);
-  if (rows.length === 0 && scope === "full") {
-    const { MOCK_INTENTS } = await loadDemoData();
-    return c.json(MOCK_INTENTS);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { MOCK_INTENTS } = await loadDemoData();
+      return c.json(MOCK_INTENTS);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.intents);
+    if (rows.length === 0 && scope === "full") {
+      const { MOCK_INTENTS } = await loadDemoData();
+      return c.json(MOCK_INTENTS);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/intents query failed", { error: err.message });
+    if (scope === "full") {
+      const { MOCK_INTENTS } = await loadDemoData();
+      return c.json(MOCK_INTENTS);
+    }
+    return c.json([]);
+  }
 });
 
 app.get("/api/intents/:id", requireDb, async (c) => {
@@ -487,43 +517,88 @@ app.post("/api/intents", requireAuth, requireRole("smb"), requireDb, async (c) =
 // ─── TRANSACTIONS ───
 
 app.get("/api/transactions", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.transactions);
-  if (rows.length === 0 && scope === "full") {
-    const { TRANSACTIONS } = await loadDemoData();
-    return c.json(TRANSACTIONS);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { TRANSACTIONS } = await loadDemoData();
+      return c.json(TRANSACTIONS);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.transactions);
+    if (rows.length === 0 && scope === "full") {
+      const { TRANSACTIONS } = await loadDemoData();
+      return c.json(TRANSACTIONS);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/transactions query failed", { error: err.message });
+    if (scope === "full") {
+      const { TRANSACTIONS } = await loadDemoData();
+      return c.json(TRANSACTIONS);
+    }
+    return c.json([]);
+  }
 });
 
 // ─── SIGNALS (Live Auction Feed) ───
 
 app.get("/api/signals", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.signals);
-  if (rows.length === 0 && scope === "full") {
-    const { LIVE_SIGNALS } = await loadDemoData();
-    return c.json(LIVE_SIGNALS);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { LIVE_SIGNALS } = await loadDemoData();
+      return c.json(LIVE_SIGNALS);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.signals);
+    if (rows.length === 0 && scope === "full") {
+      const { LIVE_SIGNALS } = await loadDemoData();
+      return c.json(LIVE_SIGNALS);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/signals query failed", { error: err.message });
+    if (scope === "full") {
+      const { LIVE_SIGNALS } = await loadDemoData();
+      return c.json(LIVE_SIGNALS);
+    }
+    return c.json([]);
+  }
 });
 
 // ─── JOBS ───
 
 app.get("/api/jobs", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.jobs);
-  if (rows.length === 0 && scope === "full") {
-    const { MOCK_JOBS } = await loadDemoData();
-    return c.json(MOCK_JOBS);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { MOCK_JOBS } = await loadDemoData();
+      return c.json(MOCK_JOBS);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.jobs);
+    if (rows.length === 0 && scope === "full") {
+      const { MOCK_JOBS } = await loadDemoData();
+      return c.json(MOCK_JOBS);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/jobs query failed", { error: err.message });
+    if (scope === "full") {
+      const { MOCK_JOBS } = await loadDemoData();
+      return c.json(MOCK_JOBS);
+    }
+    return c.json([]);
+  }
 });
 
 app.get("/api/jobs/:id", requireDb, async (c) => {
@@ -569,15 +644,30 @@ app.post("/api/jobs", requireAuth, requireDb, async (c) => {
 // ─── ESCROW ───
 
 app.get("/api/escrow", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.escrow);
-  if (rows.length === 0 && scope === "full") {
-    const { MOCK_ESCROW } = await loadDemoData();
-    return c.json(MOCK_ESCROW);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { MOCK_ESCROW } = await loadDemoData();
+      return c.json(MOCK_ESCROW);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.escrow);
+    if (rows.length === 0 && scope === "full") {
+      const { MOCK_ESCROW } = await loadDemoData();
+      return c.json(MOCK_ESCROW);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/escrow query failed", { error: err.message });
+    if (scope === "full") {
+      const { MOCK_ESCROW } = await loadDemoData();
+      return c.json(MOCK_ESCROW);
+    }
+    return c.json([]);
+  }
 });
 
 app.get("/api/escrow/:id", requireDb, async (c) => {
@@ -892,72 +982,124 @@ app.get("/api/stripe/status", (c) => {
 // ─── METRICS ───
 
 app.get("/api/metrics", async (c) => {
-  if (!isDbAvailable()) return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
   const scope = await getDemoScope(c);
-  if (scope === "market") {
-    return c.json({ revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] });
-  }
-  const revenue = await db.select().from(schema.revenueMonths);
-  if (revenue.length === 0 && scope === "full") {
+  const emptyMetrics = { revenue: [], perf: {}, verticalSplit: {}, trendingUp: [] };
+  const fullMetrics = async () => {
     const { REVENUE_MONTHS } = await loadDemoData();
-    return c.json({ revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+    return { revenue: REVENUE_MONTHS, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP };
+  };
+  if (scope === "market") return c.json(emptyMetrics);
+  if (!isDbAvailable()) {
+    return c.json(scope === "full" ? await fullMetrics() : emptyMetrics);
   }
-  return c.json({ revenue, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+  try {
+    const revenue = await db.select().from(schema.revenueMonths);
+    if (revenue.length === 0 && scope === "full") {
+      return c.json(await fullMetrics());
+    }
+    return c.json({ revenue, perf: PERF_METRICS, verticalSplit: VERTICAL_SPLIT, trendingUp: TRENDING_UP });
+  } catch (err) {
+    log.warn("GET /api/metrics query failed", { error: err.message });
+    return c.json(scope === "full" ? await fullMetrics() : emptyMetrics);
+  }
 });
 
 // ─── INTENT MARKET ───
 
 app.get("/api/intent-market", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") {
     const { INTENT_MARKET } = await loadDemoData();
     return c.json(INTENT_MARKET);
   }
-  const rows = await db.select().from(schema.intentMarket);
-  if (rows.length === 0 && scope === "full") {
-    const { INTENT_MARKET } = await loadDemoData();
-    return c.json(INTENT_MARKET);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { INTENT_MARKET } = await loadDemoData();
+      return c.json(INTENT_MARKET);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.intentMarket);
+    if (rows.length === 0 && scope === "full") {
+      const { INTENT_MARKET } = await loadDemoData();
+      return c.json(INTENT_MARKET);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/intent-market query failed", { error: err.message });
+    if (scope === "full" || scope === "market") {
+      const { INTENT_MARKET } = await loadDemoData();
+      return c.json(INTENT_MARKET);
+    }
+    return c.json([]);
+  }
 });
 
 // ─── INTENT CATEGORIES ───
 
 app.get("/api/intent-categories", async (c) => {
-  if (!isDbAvailable()) return c.json([]);
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json([]);
-  const rows = await db.select().from(schema.intentCategories);
-  if (rows.length === 0 && scope === "full") {
-    const { INTENT_CATEGORIES } = await loadDemoData();
-    return c.json(INTENT_CATEGORIES);
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { INTENT_CATEGORIES } = await loadDemoData();
+      return c.json(INTENT_CATEGORIES);
+    }
+    return c.json([]);
   }
-  return c.json(rows);
+  try {
+    const rows = await db.select().from(schema.intentCategories);
+    if (rows.length === 0 && scope === "full") {
+      const { INTENT_CATEGORIES } = await loadDemoData();
+      return c.json(INTENT_CATEGORIES);
+    }
+    return c.json(rows);
+  } catch (err) {
+    log.warn("GET /api/intent-categories query failed", { error: err.message });
+    if (scope === "full") {
+      const { INTENT_CATEGORIES } = await loadDemoData();
+      return c.json(INTENT_CATEGORIES);
+    }
+    return c.json([]);
+  }
 });
 
 // ─── SLA TEMPLATES ───
 
 app.get("/api/sla-templates", async (c) => {
-  if (!isDbAvailable()) return c.json({});
   const scope = await getDemoScope(c);
   if (scope === "market") return c.json({});
-  const rows = await db.select().from(schema.slaTemplates);
-  if (rows.length === 0 && scope === "full") {
-    const { SLA_TEMPLATES } = await loadDemoData();
+  const groupSla = (rows) => {
     const grouped = {};
-    for (const r of SLA_TEMPLATES) {
+    for (const r of rows) {
       if (!grouped[r.vertical]) grouped[r.vertical] = [];
       grouped[r.vertical].push(r);
     }
-    return c.json(grouped);
+    return grouped;
+  };
+  if (!isDbAvailable()) {
+    if (scope === "full") {
+      const { SLA_TEMPLATES } = await loadDemoData();
+      return c.json(groupSla(SLA_TEMPLATES));
+    }
+    return c.json({});
   }
-  const grouped = {};
-  for (const r of rows) {
-    if (!grouped[r.vertical]) grouped[r.vertical] = [];
-    grouped[r.vertical].push(r);
+  try {
+    const rows = await db.select().from(schema.slaTemplates);
+    if (rows.length === 0 && scope === "full") {
+      const { SLA_TEMPLATES } = await loadDemoData();
+      return c.json(groupSla(SLA_TEMPLATES));
+    }
+    return c.json(groupSla(rows));
+  } catch (err) {
+    log.warn("GET /api/sla-templates query failed", { error: err.message });
+    if (scope === "full") {
+      const { SLA_TEMPLATES } = await loadDemoData();
+      return c.json(groupSla(SLA_TEMPLATES));
+    }
+    return c.json({});
   }
-  return c.json(grouped);
 });
 
 // ─── STATIC CONFIG ───

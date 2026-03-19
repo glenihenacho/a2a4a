@@ -14,6 +14,8 @@ const TRANSACTIONS = [
   { id: "TXN-0040", type: "milestone", agent: "RankForge", client: "ClearView Solar", amount: 1200, currency: "USDC", status: "settled", date: "2025-02-21", vertical: "AIO" },
   { id: "TXN-0039", type: "clearing", agent: "OverviewFirst", client: "MindfulApp", amount: 620, currency: "USDC", status: "pending", date: "2025-02-21", vertical: "AIO" },
   { id: "TXN-0036", type: "refund", agent: "SerpAgent", client: "Apex Dental", amount: -340, currency: "USDC", status: "settled", date: "2025-02-17", vertical: "SEO" },
+  { id: "TXN-0035", type: "milestone", agent: "Linksmith AI", client: "GreenHaven Farms", amount: 750, currency: "USD", status: "settled", date: "2025-02-15", vertical: "SEO" },
+  { id: "TXN-0034", type: "clearing", agent: "ContentMesh", client: "Bloom Botanicals", amount: 980, currency: "USDC", status: "settled", date: "2025-02-14", vertical: "AIO" },
 ];
 
 const MOCK_AGENTS = [
@@ -66,6 +68,29 @@ const MOCK_AGENTS = [
     totalRuns: 186, successRate: 91.4, avgRuntime: "32m", avgCost: "$198", activeContracts: 8, reputation: 94, monthlyRev: 3100, avgRoi: 3.8, wins: 15,
   },
   {
+    id: "agt-003", name: "Linksmith AI", avatar: "LS", version: "1.8.3", verified: true,
+    signedAt: "2025-02-15T14:22:00Z", status: "live", verticals: ["SEO"],
+    description: "Specialized link building agent combining prospecting, outreach, and placement verification in a single autonomous pipeline with human-in-the-loop approval gates.",
+    capabilities: [
+      { verb: "prospect_links", domain: "SEO", desc: "Identify high-authority link targets via relevance scoring" },
+      { verb: "generate_outreach", domain: "SEO", desc: "Personalized outreach email generation and sequencing" },
+      { verb: "verify_placement", domain: "SEO", desc: "Confirm link placement, anchor text, and follow status" },
+      { verb: "analyze_backlinks", domain: "SEO", desc: "Competitor backlink profile gap analysis" },
+    ],
+    inputSchema: { fields: ["target_domain", "niche_keywords[]", "competitor_domains[]", "outreach_budget", "approval_webhook"], version: "1.0" },
+    outputSchema: { fields: ["prospects[]", "outreach_log[]", "placements[]", "authority_delta", "cost_breakdown"], version: "1.0" },
+    toolRequirements: ["backlink_analyzer", "email_sender", "web_scraper", "domain_authority_api"],
+    sla: { latencyP50: "8.1s", latencyP99: "28s", maxCost: "$450/run", retryPolicy: "3x exp backoff, 45s base", supportWindow: "24/7 auto", uptime: "99.2%" },
+    policy: { disallowed: ["PBN links", "Paid link schemes", "Spam anchor text", "Auto-email w/o approval"], dataRetention: "30d encrypted", sandbox: "Outbound email rate-limited, domain allowlist" },
+    evalClaims: [
+      { metric: "Link acquisition rate", target: "≥8/month", achieved: "11 avg", pass: true },
+      { metric: "Domain authority avg", target: "DA ≥40", achieved: "DA 47", pass: true },
+      { metric: "Outreach response rate", target: "≥12%", achieved: "14.6%", pass: true },
+      { metric: "Placement verification", target: "100% verified", achieved: "97%", pass: false },
+    ],
+    totalRuns: 520, successRate: 88.3, avgRuntime: "2.1h", avgCost: "$312", activeContracts: 18, reputation: 89, monthlyRev: 2800, avgRoi: 3.2, wins: 41,
+  },
+  {
     id: "agt-004", name: "SerpAgent", avatar: "SA", version: "2.0.0", verified: false,
     signedAt: null, status: "evaluation", verticals: ["SEO"],
     description: "SEO agent in marketplace evaluation. Combines technical crawling with SERP position monitoring and mobile-first indexing optimization.",
@@ -85,6 +110,29 @@ const MOCK_AGENTS = [
       { metric: "Budget adherence", target: "≤110% of cap", achieved: "104%", pass: true },
     ],
     totalRuns: 87, successRate: 79.3, avgRuntime: "24m", avgCost: "$165", activeContracts: 0, reputation: 0, monthlyRev: 1900, avgRoi: 2.1, wins: 19,
+  },
+  {
+    id: "agt-005", name: "ContentMesh", avatar: "CM", version: "1.5.2", verified: true,
+    signedAt: "2025-02-19T08:45:00Z", status: "live", verticals: ["AIO"],
+    description: "Content-first AIO agent generating structured, citation-optimized content blocks. Converts existing pages into AIO-ready formats with entity linking and structured data.",
+    capabilities: [
+      { verb: "restructure_content", domain: "AIO", desc: "Transform pages into AI-extractable format" },
+      { verb: "generate_structured_data", domain: "AIO", desc: "Auto-generate JSON-LD schema from content" },
+      { verb: "entity_linking", domain: "AIO", desc: "Map content entities to knowledge graph nodes" },
+      { verb: "citation_optimization", domain: "AIO", desc: "Optimize content for AI citation probability" },
+    ],
+    inputSchema: { fields: ["content_urls[]", "target_entities[]", "schema_preferences", "citation_targets[]", "budget_cap"], version: "1.4" },
+    outputSchema: { fields: ["optimized_pages[]", "schema_blocks[]", "entity_map", "citation_score", "structured_data_report"], version: "1.4" },
+    toolRequirements: ["content_analyzer", "schema_generator", "knowledge_graph_api", "cms_writer", "nlp_pipeline"],
+    sla: { latencyP50: "5.1s", latencyP99: "18s", maxCost: "$260/run", retryPolicy: "3x exp backoff, 20s base", supportWindow: "24/7 auto", uptime: "99.5%" },
+    policy: { disallowed: ["Hallucinated entities", "Schema manipulation", "Copyright infringement"], dataRetention: "30d encrypted", sandbox: "Read-only source, write to staging" },
+    evalClaims: [
+      { metric: "Schema validity rate", target: "100%", achieved: "100%", pass: true },
+      { metric: "Entity accuracy", target: "≥95%", achieved: "97.2%", pass: true },
+      { metric: "Citation score lift", target: "+20pts avg", achieved: "+24pts", pass: true },
+      { metric: "Processing throughput", target: "≥10 pages/run", achieved: "12.4 avg", pass: true },
+    ],
+    totalRuns: 214, successRate: 96.3, avgRuntime: "14m", avgCost: "$118", activeContracts: 9, reputation: 91, monthlyRev: 2100, avgRoi: 3.0, wins: 10,
   },
   {
     id: "agt-006", name: "TechSEO Pro", avatar: "TP", version: "4.0.1", verified: true,
