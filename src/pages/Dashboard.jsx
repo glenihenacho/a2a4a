@@ -5139,7 +5139,7 @@ function PulsingDot({ color, pulse }) {
 function Live({ mob, tab }) {
   const { signals: LIVE_SIGNALS, agents: ALL_AGENTS, intentMarket: INTENT_MARKET } = useData();
   const [sort, setSort] = useState("signal");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [duration, setDuration] = useState("7d");
   const [expanded] = useState(null);
   const [pulse, setPulse] = useState(true);
   const [budgetMgr, setBudgetMgr] = useState(null);
@@ -5151,13 +5151,10 @@ function Live({ mob, tab }) {
     return () => clearInterval(t);
   }, []);
 
-  const filtered = statusFilter === "all" ? LIVE_SIGNALS : LIVE_SIGNALS.filter((s) => s.status === statusFilter);
-  const sorted = [...filtered].sort((a, b) => {
+  const sorted = [...LIVE_SIGNALS].sort((a, b) => {
     if (sort === "signal") return b.signal - a.signal;
     if (sort === "rank") return a.rank - b.rank;
     if (sort === "spend") return b.avgSpend - a.avgSpend;
-    if (sort === "agents") return b.agents - a.agents;
-    if (sort === "impressions") return b.impressions - a.impressions;
     return 0;
   });
 
@@ -5530,7 +5527,7 @@ function Live({ mob, tab }) {
         </div>
       )}
 
-      {/* Filters + Sort */}
+      {/* Sort + Duration */}
       <div
         style={{
           display: "flex",
@@ -5552,47 +5549,12 @@ function Live({ mob, tab }) {
               letterSpacing: ".06em",
             }}
           >
-            Status:
-          </span>
-          {["all", "live", "warming", "cooling"].map((fl) => (
-            <button
-              key={fl}
-              onClick={() => setStatusFilter(fl)}
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 9,
-                fontWeight: 600,
-                background: statusFilter === fl ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.015)",
-                color: statusFilter === fl ? (fl === "all" ? blue : statusColors[fl] || blue) : "rgba(255,255,255,.25)",
-                border: `1px solid ${statusFilter === fl ? "rgba(66,165,245,.12)" : "rgba(255,255,255,.04)"}`,
-                padding: "4px 10px",
-                borderRadius: 5,
-                cursor: "pointer",
-                textTransform: "capitalize",
-              }}
-            >
-              {fl}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: ft.mono,
-              fontSize: 9,
-              color: "rgba(255,255,255,.18)",
-              textTransform: "uppercase",
-              letterSpacing: ".06em",
-            }}
-          >
             Sort:
           </span>
           {[
             { k: "signal", l: "Signal" },
             { k: "rank", l: "Rank" },
             { k: "spend", l: "Spend" },
-            { k: "agents", l: "Agents" },
-            { k: "impressions", l: "Impr." },
           ].map((s) => (
             <button
               key={s.k}
@@ -5610,6 +5572,28 @@ function Live({ mob, tab }) {
               }}
             >
               {s.l}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          {["7d", "3m", "1y", "5y"].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDuration(d)}
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 9,
+                fontWeight: 600,
+                background: duration === d ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.015)",
+                color: duration === d ? blue : "rgba(255,255,255,.25)",
+                border: `1px solid ${duration === d ? "rgba(66,165,245,.12)" : "rgba(255,255,255,.04)"}`,
+                padding: "4px 8px",
+                borderRadius: 5,
+                cursor: "pointer",
+                textTransform: "uppercase",
+              }}
+            >
+              {d}
             </button>
           ))}
         </div>
@@ -6914,9 +6898,20 @@ export default function MarketplaceApp() {
               </div>
             </div>
           )}
-          <div style={{ flex: 1, overflow: "auto", padding: mob ? 16 : tab ? 20 : 28, paddingBottom: mob ? 80 : 28 }}>
-            {pages[page]}
-          </div>
+          {Object.entries(pages).map(([key, component]) => (
+            <div
+              key={key}
+              style={{
+                flex: 1,
+                overflow: "auto",
+                padding: mob ? 16 : tab ? 20 : 28,
+                paddingBottom: mob ? 80 : 28,
+                display: page === key ? "block" : "none",
+              }}
+            >
+              {component}
+            </div>
+          ))}
         </div>
 
         {/* ─── MOBILE BOTTOM TAB BAR ─── */}
