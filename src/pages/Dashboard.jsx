@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
-import { ft, blue, blueDeep, bg } from "../shared/tokens";
+import { ft, blue, blueDeep, bg, green } from "../shared/tokens";
 import { useMedia, useApiData } from "../shared/hooks";
 import { useSession, signOut } from "../shared/auth";
 import { Badge, VBadge, Card, ScrollX, Sparkline, BarChart, DonutChart } from "../shared/primitives";
@@ -684,6 +684,10 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [goingLive, setGoingLive] = useState(false);
   const [budgetSaved, setBudgetSaved] = useState(false);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
   const monthlyEst = Math.round(budgetNum * 4.33);
@@ -1625,7 +1629,7 @@ function Intents({ mob, tab }) {
   const [sort, setSort] = useState("opportunity");
   const [expanded] = useState(null);
   const [focused, setFocused] = useState(null);
-  const [durationIdx, setDurationIdx] = useState("6m");
+  const [durationIdx, setDurationIdx] = useState("3m");
   const [qSearch, setQSearch] = useState("");
   const [qOpen, setQOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
@@ -1657,11 +1661,10 @@ function Intents({ mob, tab }) {
 
   // Duration options for indexing volume/growth
   const DURATION_OPTS = [
-    { k: "7d", l: "7d", points: 2 },
-    { k: "3m", l: "3m", points: 4 },
-    { k: "6m", l: "6m", points: 7 },
-    { k: "1y", l: "1y", points: 7 },
-    { k: "5y", l: "5y", points: 7 },
+    { k: "7d", l: "7D", points: 2 },
+    { k: "3m", l: "3M", points: 4 },
+    { k: "1y", l: "1Y", points: 7 },
+    { k: "5y", l: "5Y", points: 7 },
   ];
 
   const getGrowth = (intent) => {
@@ -3597,6 +3600,10 @@ function NewAgentFlow({ mob, onClose }) {
   const [submitted, setSubmitted] = useState(false);
   const [pipelineStep, setPipelineStep] = useState(0);
   const [editField, setEditField] = useState(null);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
   const [editValue, setEditValue] = useState("");
   const [showSpecs, setShowSpecs] = useState(false);
   const termRef = useCallback(
@@ -5161,8 +5168,10 @@ function Live({ mob, tab }) {
   const totalSpend = LIVE_SIGNALS.reduce((s, sig) => s + sig.avgSpend, 0);
   const totalImpressions = LIVE_SIGNALS.reduce((s, sig) => s + sig.impressions, 0);
   const liveCount = LIVE_SIGNALS.filter((s) => s.status === "live").length;
-  const avgAgents = LIVE_SIGNALS.length
-    ? (LIVE_SIGNALS.reduce((s, sig) => s + sig.agents, 0) / LIVE_SIGNALS.length).toFixed(1)
+  const avgRoi = LIVE_SIGNALS.length
+    ? (
+        LIVE_SIGNALS.reduce((s, sig) => s + (sig.avgSpend > 0 ? sig.clicks / sig.avgSpend : 0), 0) / LIVE_SIGNALS.length
+      ).toFixed(1)
     : "0.0";
   const aioVisible = LIVE_SIGNALS.filter((s) => s.aioVisible).length;
   const statusColors = { live: "#66BB6A", warming: "#FFA726", cooling: "#78909C" };
@@ -5368,7 +5377,7 @@ function Live({ mob, tab }) {
       sub: `${LIVE_SIGNALS.length ? Math.round((aioVisible / LIVE_SIGNALS.length) * 100) : 0}% coverage`,
       color: "#90CAF9",
     },
-    { label: "Avg Agents", value: avgAgents, sub: "per demand signal", color: "#FFA726" },
+    { label: "Avg ROI", value: `${avgRoi}x`, sub: "clicks per dollar", color: "#FFA726" },
   ];
 
   // ─── DETAIL VIEW (Universal SignalDetail) ───
@@ -5689,9 +5698,11 @@ function Live({ mob, tab }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Agents
+                    ROI
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 700 }}>{sig.agents}</div>
+                  <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 700, color: green }}>
+                    {sig.avgSpend > 0 ? `${(sig.clicks / sig.avgSpend).toFixed(1)}x` : "—"}
+                  </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div
@@ -5726,7 +5737,7 @@ function Live({ mob, tab }) {
                     "Industry",
                     "Signal",
                     "Avg Spend",
-                    "Agents",
+                    "ROI",
                     "Impressions",
                     "Budget",
                   ].map((h) => (
@@ -5848,9 +5859,10 @@ function Live({ mob, tab }) {
                             fontWeight: 600,
                             padding: "12px 8px",
                             textAlign: "center",
+                            color: sig.avgSpend > 0 ? green : "rgba(255,255,255,.3)",
                           }}
                         >
-                          {sig.agents}
+                          {sig.avgSpend > 0 ? `${(sig.clicks / sig.avgSpend).toFixed(1)}x` : "—"}
                         </td>
                         <td
                           style={{
@@ -5894,71 +5906,6 @@ function Live({ mob, tab }) {
           </ScrollX>
         </Card>
       )}
-
-      {/* Bottom panels */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: mob ? "1fr" : "1fr 1fr",
-          gap: mob ? 10 : 16,
-          marginTop: mob ? 10 : 20,
-        }}
-      >
-        <Card mob={mob}>
-          <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Top Spend Signals</h3>
-          {[...LIVE_SIGNALS]
-            .sort((a, b) => b.avgSpend - a.avgSpend)
-            .slice(0, 5)
-            .map((sig, i) => (
-              <div
-                key={sig.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 0",
-                  borderBottom: "1px solid rgba(255,255,255,.025)",
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "rgba(255,255,255,.12)",
-                    width: 16,
-                  }}
-                >
-                  #{i + 1}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {sig.query}
-                  </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)", marginTop: 2 }}>
-                    {sig.category}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontFamily: ft.mono, fontSize: 13, fontWeight: 700, color: blue }}>
-                    ${sig.avgSpend.toLocaleString()}
-                  </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.15)" }}>
-                    {sig.agents} agents
-                  </div>
-                </div>
-              </div>
-            ))}
-        </Card>
-      </div>
     </div>
   );
 }
@@ -6507,7 +6454,7 @@ export default function MarketplaceApp() {
     { key: "dashboard", icon: "◎", label: "Dashboard" },
     { key: "intents", icon: "◉", label: "Market" },
     { key: "auctions", icon: "⚡", label: "Live" },
-    { key: "agents", icon: "⬡", label: "Registry" },
+    { key: "agents", icon: "⬡", label: "Agents" },
     { key: "escrow", icon: "◈", label: "Escrow" },
   ];
 
