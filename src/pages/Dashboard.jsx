@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
-import { ft, blue, blueDeep, bg, green } from "../shared/tokens";
+import { ft, blue, blueDeep, bg, green, orange } from "../shared/tokens";
 import { useMedia, useApiData } from "../shared/hooks";
 import { useSession, signOut } from "../shared/auth";
 import { Badge, VBadge, Card, ScrollX, Sparkline, BarChart, DonutChart } from "../shared/primitives";
@@ -113,6 +113,7 @@ function Dashboard({ mob, tab }) {
   } = useData();
   const [txnFilter, setTxnFilter] = useState("all");
   const [perfVert, setPerfVert] = useState("all");
+  const [duration, setDuration] = useState("1Y");
 
   const filteredTxns = txnFilter === "all" ? TRANSACTIONS : TRANSACTIONS.filter((t) => t.type === txnFilter);
   const totalRevenue = REVENUE_MONTHS.reduce((s, m) => s + m.total, 0);
@@ -286,7 +287,29 @@ function Dashboard({ mob, tab }) {
         <Card mob={mob}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>Revenue</h3>
-            <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>6-month</span>
+            <div style={{ display: "flex", gap: 3 }}>
+              {["7D", "3M", "1Y", "5Y"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDuration(d)}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 8,
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    border: "none",
+                    background: duration === d ? "rgba(66,165,245,.1)" : "transparent",
+                    color: duration === d ? blue : "rgba(255,255,255,.25)",
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                  }}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
           <BarChart
             data={REVENUE_MONTHS}
@@ -684,6 +707,10 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [goingLive, setGoingLive] = useState(false);
   const [budgetSaved, setBudgetSaved] = useState(false);
+  const [chartHoverIdx, setChartHoverIdx] = useState(null);
+  const [chartLegend, setChartLegend] = useState("demand"); // "demand" | "supply" | "both"
+  const [chartDuration, setChartDuration] = useState("6M"); // "1M" | "3M" | "6M" | "1Y"
+  const chartSvgRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -846,192 +873,289 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
       </div>
 
       {/* Indexable Popularity Chart */}
-      <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div>
-            <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
-              Indexable Popularity
-            </h3>
-            <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
-              6-month supply & demand trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
-              <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
-              <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
-          <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
-            <defs>
-              <linearGradient id={`uniDemFill${signal.id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={blue} stopOpacity=".15" />
-                <stop offset="100%" stopColor={blue} stopOpacity="0" />
-              </linearGradient>
-              <linearGradient id={`uniSupFill${signal.id}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
-                <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
-              const yy = pad.top + plotH * (1 - pct);
-              const val = chartMin + range * pct;
-              return (
-                <g key={i}>
-                  <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
-                  <text
-                    x={pad.left - 4}
-                    y={yy + 3}
-                    textAnchor="end"
-                    fill="rgba(255,255,255,.12)"
-                    style={{ fontFamily: ft.mono, fontSize: 7 }}
-                  >
-                    {(val / 1000).toFixed(0)}K
-                  </text>
-                </g>
-              );
-            })}
-            <path d={supplyArea} fill={`url(#uniSupFill${signal.id})`} />
-            <path
-              d={supplyLine}
-              fill="none"
-              stroke="#FFA726"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray="6 3"
-            />
-            <path d={demandArea} fill={`url(#uniDemFill${signal.id})`} />
-            <path
-              d={demandLine}
-              fill="none"
-              stroke={blue}
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {demandPts.map((p, i) => (
-              <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
-            ))}
-            {supplyPts.map((p, i) => (
-              <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
-            ))}
-            {(() => {
-              const dLast = demandPts[demandPts.length - 1];
-              const sLast = supplyPts[supplyPts.length - 1];
-              const gap = Math.abs(dLast.y - sLast.y);
-              if (gap < 8) return null;
-              const midY = (dLast.y + sLast.y) / 2;
-              return (
-                <>
-                  <line
-                    x1={dLast.x + 8}
-                    y1={dLast.y}
-                    x2={dLast.x + 8}
-                    y2={sLast.y}
-                    stroke="rgba(102,187,106,.3)"
-                    strokeWidth={1}
-                    strokeDasharray="2 2"
-                  />
-                  <text
-                    x={dLast.x + 14}
-                    y={midY + 3}
-                    fill="#66BB6A"
-                    style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
-                  >
-                    GAP
-                  </text>
-                </>
-              );
-            })()}
-            {months.slice(0, d.length).map((m, i) => (
-              <text
-                key={`m${i}`}
-                x={demandPts[i].x}
-                y={chartH - 4}
-                textAnchor="middle"
-                fill="rgba(255,255,255,.15)"
-                style={{ fontFamily: ft.mono, fontSize: 8 }}
+      {(() => {
+        const showDemand = chartLegend === "demand" || chartLegend === "both";
+        const showSupply = chartLegend === "supply" || chartLegend === "both";
+        const durationSlices = { "1M": 2, "3M": 4, "6M": 7, "1Y": 7 };
+        const sliceLen = Math.min(durationSlices[chartDuration] || 7, d.length);
+        const slicedD = d.slice(d.length - sliceLen);
+        const slicedSupply = supplyTrend.slice(supplyTrend.length - sliceLen);
+        const slicedMonths = months.slice(months.length - sliceLen);
+        const visibleVals = [...(showDemand ? slicedD : []), ...(showSupply ? slicedSupply : [])].map((v) => v * 1000);
+        const cMax = visibleVals.length ? Math.max(...visibleVals) : chartMax;
+        const cMin = visibleVals.length ? Math.min(...visibleVals) : chartMin;
+        const cRange = cMax - cMin || 1;
+        const cPad = { top: 20, bottom: 28, left: 12, right: 12 };
+        const cPlotW = chartW - cPad.left - cPad.right;
+        const cPlotH = chartH - cPad.top - cPad.bottom;
+        const dPts = slicedD.map((v, i) => ({
+          x: cPad.left + (sliceLen > 1 ? (i / (sliceLen - 1)) * cPlotW : cPlotW / 2),
+          y: cPad.top + cPlotH - ((v * 1000 - cMin) / cRange) * cPlotH,
+          val: v,
+        }));
+        const sPts = slicedSupply.map((v, i) => ({
+          x: cPad.left + (sliceLen > 1 ? (i / (sliceLen - 1)) * cPlotW : cPlotW / 2),
+          y: cPad.top + cPlotH - ((v * 1000 - cMin) / cRange) * cPlotH,
+          val: v,
+        }));
+        const dLine = dPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+        const sLine = sPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+        const dArea = `${dLine} L${dPts[dPts.length - 1].x},${cPad.top + cPlotH} L${dPts[0].x},${cPad.top + cPlotH} Z`;
+        const sArea = `${sLine} L${sPts[sPts.length - 1].x},${cPad.top + cPlotH} L${sPts[0].x},${cPad.top + cPlotH} Z`;
+        const hIdx = chartHoverIdx !== null && chartHoverIdx < sliceLen ? chartHoverIdx : null;
+
+        const handleChartInteraction = (e) => {
+          const svg = chartSvgRef.current;
+          if (!svg) return;
+          const rect = svg.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const relX = clientX - rect.left - cPad.left;
+          const frac = relX / cPlotW;
+          const idx = Math.round(frac * (sliceLen - 1));
+          setChartHoverIdx(Math.max(0, Math.min(sliceLen - 1, idx)));
+        };
+
+        return (
+          <div style={{ marginBottom: mob ? 14 : 24 }}>
+            <div
+              style={{ position: "relative", cursor: "crosshair" }}
+              onMouseMove={handleChartInteraction}
+              onTouchMove={(e) => {
+                e.preventDefault();
+                handleChartInteraction(e);
+              }}
+              onTouchStart={handleChartInteraction}
+              onMouseLeave={() => setChartHoverIdx(null)}
+              onTouchEnd={() => setChartHoverIdx(null)}
+            >
+              <svg
+                ref={chartSvgRef}
+                width={chartW}
+                height={chartH}
+                style={{ display: "block", width: "100%", height: "auto" }}
               >
-                {m}
-              </text>
-            ))}
-          </svg>
-        </div>
-        {/* Summary strip */}
-        <div
-          style={{
-            display: "flex",
-            gap: mob ? 8 : 16,
-            marginTop: 14,
-            padding: "10px 14px",
-            background: "rgba(102,187,106,.03)",
-            borderRadius: 8,
-            border: "1px solid rgba(102,187,106,.06)",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 80 }}>
+                <defs>
+                  <linearGradient id={`demGrad${signal.id}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={blue} stopOpacity=".12" />
+                    <stop offset="100%" stopColor={blue} stopOpacity="0" />
+                  </linearGradient>
+                  <linearGradient id={`supGrad${signal.id}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={orange} stopOpacity=".08" />
+                    <stop offset="100%" stopColor={orange} stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                {/* Single baseline */}
+                <line
+                  x1={cPad.left}
+                  y1={cPad.top + cPlotH}
+                  x2={chartW - cPad.right}
+                  y2={cPad.top + cPlotH}
+                  stroke="rgba(255,255,255,.04)"
+                />
+                {/* Supply */}
+                {showSupply && (
+                  <>
+                    <path d={sArea} fill={`url(#supGrad${signal.id})`} />
+                    <path
+                      d={sLine}
+                      fill="none"
+                      stroke={orange}
+                      strokeWidth={1.5}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={hIdx !== null ? 0.4 : 0.7}
+                    />
+                  </>
+                )}
+                {/* Demand */}
+                {showDemand && (
+                  <>
+                    <path d={dArea} fill={`url(#demGrad${signal.id})`} />
+                    <path
+                      d={dLine}
+                      fill="none"
+                      stroke={blue}
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity={hIdx !== null ? 0.5 : 1}
+                    />
+                  </>
+                )}
+                {/* Data points — subtle unless hovered */}
+                {showDemand &&
+                  dPts.map((p, i) => (
+                    <circle
+                      key={`dp${i}`}
+                      cx={p.x}
+                      cy={p.y}
+                      r={hIdx === i ? 5 : 2.5}
+                      fill={hIdx === i ? blue : "rgba(66,165,245,.35)"}
+                      stroke={hIdx === i ? "#fff" : "none"}
+                      strokeWidth={hIdx === i ? 1.5 : 0}
+                      style={{ transition: "r .15s, fill .15s" }}
+                    />
+                  ))}
+                {showSupply &&
+                  sPts.map((p, i) => (
+                    <circle
+                      key={`sp${i}`}
+                      cx={p.x}
+                      cy={p.y}
+                      r={hIdx === i ? 4 : 2}
+                      fill={hIdx === i ? orange : "rgba(255,167,38,.35)"}
+                      stroke={hIdx === i ? "#fff" : "none"}
+                      strokeWidth={hIdx === i ? 1.5 : 0}
+                      style={{ transition: "r .15s, fill .15s" }}
+                    />
+                  ))}
+                {/* Vertical trace line on hover */}
+                {hIdx !== null && (
+                  <line
+                    x1={dPts[hIdx].x}
+                    y1={cPad.top}
+                    x2={dPts[hIdx].x}
+                    y2={cPad.top + cPlotH}
+                    stroke="rgba(255,255,255,.1)"
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                  />
+                )}
+                {/* Month labels */}
+                {slicedMonths.map((m, i) => (
+                  <text
+                    key={`ml${i}`}
+                    x={dPts[i].x}
+                    y={chartH - 4}
+                    textAnchor="middle"
+                    fill={hIdx === i ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.15)"}
+                    style={{ fontFamily: ft.mono, fontSize: 8, transition: "fill .15s" }}
+                  >
+                    {m}
+                  </text>
+                ))}
+              </svg>
+
+              {/* Hover tooltip */}
+              {hIdx !== null && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: Math.min(Math.max(dPts[hIdx].x * (100 / chartW), 5), 85) + "%",
+                    top: 0,
+                    transform: "translateX(-50%)",
+                    background: "rgba(6,10,18,.92)",
+                    border: "1px solid rgba(66,165,245,.15)",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    minWidth: 100,
+                  }}
+                >
+                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.4)", marginBottom: 4 }}>
+                    {slicedMonths[hIdx]}
+                  </div>
+                  {showDemand && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: showSupply ? 3 : 0 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: 6, background: blue }} />
+                      <span style={{ fontFamily: ft.mono, fontSize: 10, color: blue, fontWeight: 600 }}>
+                        {slicedD[hIdx]}K
+                      </span>
+                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>demand</span>
+                    </div>
+                  )}
+                  {showSupply && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: 6, background: orange }} />
+                      <span style={{ fontFamily: ft.mono, fontSize: 10, color: orange, fontWeight: 600 }}>
+                        {slicedSupply[hIdx]}K
+                      </span>
+                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>supply</span>
+                    </div>
+                  )}
+                  {showDemand && showSupply && (
+                    <div style={{ marginTop: 3, borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: 3 }}>
+                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: green, fontWeight: 600 }}>
+                        {slicedD[hIdx] > slicedSupply[hIdx] ? "+" : ""}
+                        {slicedD[hIdx] - slicedSupply[hIdx]}K gap
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Filter row — legend selector + duration */}
             <div
               style={{
-                fontFamily: ft.mono,
-                fontSize: 8,
-                color: "rgba(255,255,255,.2)",
-                textTransform: "uppercase",
-                letterSpacing: ".06em",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 8,
+                padding: "0 2px",
               }}
             >
-              Demand Volume
-            </div>
-            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
-              {signal.vol
-                ? `${(signal.vol / 1000).toFixed(0)}K`
-                : signal.impressions
-                  ? `${(signal.impressions / 1000).toFixed(1)}K`
-                  : `${d[d.length - 1]}K`}
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
+              <select
+                value={chartLegend}
+                onChange={(e) => setChartLegend(e.target.value)}
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.5)",
+                  background: "rgba(255,255,255,.03)",
+                  border: "1px solid rgba(255,255,255,.06)",
+                  borderRadius: 6,
+                  padding: "5px 10px",
+                  outline: "none",
+                  cursor: "pointer",
+                  appearance: "none",
+                  WebkitAppearance: "none",
+                  backgroundImage:
+                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E\")",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 8px center",
+                  paddingRight: 24,
+                }}
+              >
+                <option value="demand" style={{ background: "#0A0F1A" }}>
+                  Demand
+                </option>
+                <option value="supply" style={{ background: "#0A0F1A" }}>
+                  Supply
+                </option>
+                <option value="both" style={{ background: "#0A0F1A" }}>
+                  Both
+                </option>
+              </select>
+
+              <div style={{ display: "flex", gap: 2 }}>
+                {["1M", "3M", "6M", "1Y"].map((dur) => (
+                  <button
+                    key={dur}
+                    onClick={() => setChartDuration(dur)}
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 10,
+                      fontWeight: chartDuration === dur ? 700 : 500,
+                      color: chartDuration === dur ? blue : "rgba(255,255,255,.25)",
+                      background: chartDuration === dur ? "rgba(66,165,245,.08)" : "transparent",
+                      border: "none",
+                      borderRadius: 5,
+                      padding: "5px 10px",
+                      cursor: "pointer",
+                      transition: "all .15s",
+                    }}
+                  >
+                    {dur}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div style={{ flex: 1, minWidth: 80 }}>
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 8,
-                color: "rgba(255,255,255,.2)",
-                textTransform: "uppercase",
-                letterSpacing: ".06em",
-              }}
-            >
-              Supply Capacity
-            </div>
-            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
-              {agentCount} agent{agentCount !== 1 ? "s" : ""}
-            </div>
-          </div>
-          <div style={{ flex: 1, minWidth: 80 }}>
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 8,
-                color: "rgba(255,255,255,.2)",
-                textTransform: "uppercase",
-                letterSpacing: ".06em",
-              }}
-            >
-              Market Gap
-            </div>
-            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-              {competition < 75 ? "High" : competition < 90 ? "Medium" : "Narrow"}
-            </div>
-          </div>
-        </div>
-      </Card>
+        );
+      })()}
 
       {/* Related Signals */}
       {relatedSignals && relatedSignals.length > 0 && (
