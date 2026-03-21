@@ -29,7 +29,7 @@ test.describe("Route navigation", () => {
       await expect(page.locator("button", { hasText: "Dashboard" }).first()).toBeVisible();
       await expect(page.locator("button", { hasText: "Market" })).toBeVisible();
       await expect(page.locator("button", { hasText: "Live" })).toBeVisible();
-      await expect(page.locator("button", { hasText: "Registry" })).toBeVisible();
+      await expect(page.locator("button", { hasText: "Agents" })).toBeVisible();
       await expect(page.locator("button", { hasText: "Escrow" })).toBeVisible();
     });
 
@@ -45,8 +45,8 @@ test.describe("Route navigation", () => {
       await page.locator("button", { hasText: "Live" }).click();
       await expect(page.getByRole("heading", { name: "Live" })).toBeVisible();
 
-      // Click Registry tab
-      await page.locator("button", { hasText: "Registry" }).click();
+      // Click Agents tab
+      await page.locator("button", { hasText: "Agents" }).click();
       await expect(page.locator("text=Agent Registry")).toBeVisible();
 
       // Click Escrow tab
