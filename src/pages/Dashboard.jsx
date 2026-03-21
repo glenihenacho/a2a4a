@@ -878,150 +878,241 @@ function Intents({ mob, tab }) {
           </div>
         </div>
 
-        {/* Volume & Growth — Duration Index */}
-        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 16,
-            }}
-          >
-            <div>
-              <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
-                Volume & Growth
-              </h3>
-              <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>
-                {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
+        {/* Indexable Popularity — Supply vs Demand chart */}
+        {(() => {
+          const supplyTrend = d.map((v, i) => Math.round((detailIntent.competition / 100) * v * (0.6 + i * 0.06)));
+          const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
+          const chartMax = Math.max(...allVals);
+          const chartMin = Math.min(...allVals);
+          const range = chartMax - chartMin || 1;
+          const chartW = mob ? 280 : 520;
+          const chartH = mob ? 160 : 200;
+          const pad = { top: 16, bottom: 40, left: 40, right: 20 };
+          const plotW = chartW - pad.left - pad.right;
+          const plotH = chartH - pad.top - pad.bottom;
+          const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+
+          const demandPts = d.map((v, i) => ({
+            x: pad.left + (i / (d.length - 1)) * plotW,
+            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+          }));
+          const supplyPts = supplyTrend.map((v, i) => ({
+            x: pad.left + (i / (d.length - 1)) * plotW,
+            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+          }));
+
+          const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+          const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+          const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
+          const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
+
+          return (
+            <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+                    Indexable Popularity
+                  </h3>
+                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
+                    6-month supply & demand trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
+                    <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
+                    <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: growth >= 0 ? "#66BB6A" : "#EF5350",
+                      background: growth >= 0 ? "rgba(102,187,106,.06)" : "rgba(239,83,80,.06)",
+                      padding: "3px 10px",
+                      borderRadius: 5,
+                    }}
+                  >
+                    {growth >= 0 ? "+" : ""}
+                    {growth}%
+                  </div>
+                </div>
               </div>
-            </div>
-            <div
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 12,
-                fontWeight: 700,
-                color: growth >= 0 ? "#66BB6A" : "#EF5350",
-                background: growth >= 0 ? "rgba(102,187,106,.06)" : "rgba(239,83,80,.06)",
-                padding: "4px 12px",
-                borderRadius: 6,
-              }}
-            >
-              {growth >= 0 ? "+" : ""}
-              {growth}%
-            </div>
-          </div>
-          {/* Duration selector */}
-          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-            {DURATION_OPTS.map((dur) => (
-              <button
-                key={dur.k}
-                onClick={() => setDurationIdx(dur.k)}
+              {/* Chart */}
+              <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
+                <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
+                  <defs>
+                    <linearGradient id={`detDemFill${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={blue} stopOpacity=".15" />
+                      <stop offset="100%" stopColor={blue} stopOpacity="0" />
+                    </linearGradient>
+                    <linearGradient id={`detSupFill${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
+                      <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  {/* Grid lines */}
+                  {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+                    const yy = pad.top + plotH * (1 - pct);
+                    const val = chartMin + range * pct;
+                    return (
+                      <g key={i}>
+                        <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
+                        <text
+                          x={pad.left - 4}
+                          y={yy + 3}
+                          textAnchor="end"
+                          fill="rgba(255,255,255,.12)"
+                          style={{ fontFamily: ft.mono, fontSize: 7 }}
+                        >
+                          {(val / 1000).toFixed(0)}K
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {/* Supply area + line */}
+                  <path d={supplyArea} fill={`url(#detSupFill${detailIntent.id})`} />
+                  <path
+                    d={supplyLine}
+                    fill="none"
+                    stroke="#FFA726"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="6 3"
+                  />
+                  {/* Demand area + line */}
+                  <path d={demandArea} fill={`url(#detDemFill${detailIntent.id})`} />
+                  <path
+                    d={demandLine}
+                    fill="none"
+                    stroke={blue}
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Demand dots */}
+                  {demandPts.map((p, i) => (
+                    <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
+                  ))}
+                  {/* Supply dots */}
+                  {supplyPts.map((p, i) => (
+                    <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
+                  ))}
+                  {/* Gap highlight at last point */}
+                  {(() => {
+                    const dLast = demandPts[demandPts.length - 1];
+                    const sLast = supplyPts[supplyPts.length - 1];
+                    const gap = Math.abs(dLast.y - sLast.y);
+                    if (gap < 8) return null;
+                    const midY = (dLast.y + sLast.y) / 2;
+                    return (
+                      <>
+                        <line
+                          x1={dLast.x + 8}
+                          y1={dLast.y}
+                          x2={dLast.x + 8}
+                          y2={sLast.y}
+                          stroke="rgba(102,187,106,.3)"
+                          strokeWidth={1}
+                          strokeDasharray="2 2"
+                        />
+                        <text
+                          x={dLast.x + 14}
+                          y={midY + 3}
+                          fill="#66BB6A"
+                          style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
+                        >
+                          GAP
+                        </text>
+                      </>
+                    );
+                  })()}
+                  {/* X-axis labels */}
+                  {months.slice(0, d.length).map((m, i) => (
+                    <text
+                      key={`m${i}`}
+                      x={demandPts[i].x}
+                      y={chartH - 4}
+                      textAnchor="middle"
+                      fill="rgba(255,255,255,.15)"
+                      style={{ fontFamily: ft.mono, fontSize: 8 }}
+                    >
+                      {m}
+                    </text>
+                  ))}
+                </svg>
+              </div>
+              {/* Summary strip */}
+              <div
                 style={{
-                  flex: 1,
-                  fontFamily: ft.mono,
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: durationIdx === dur.k ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
-                  color: durationIdx === dur.k ? blue : "rgba(255,255,255,.3)",
-                  border: `1px solid ${durationIdx === dur.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
-                  padding: "10px 0",
+                  display: "flex",
+                  gap: mob ? 8 : 16,
+                  marginTop: 14,
+                  padding: "10px 14px",
+                  background: "rgba(102,187,106,.03)",
                   borderRadius: 8,
-                  cursor: "pointer",
-                  transition: "all .2s",
+                  border: "1px solid rgba(102,187,106,.06)",
+                  flexWrap: "wrap",
                 }}
               >
-                {dur.l}
-              </button>
-            ))}
-          </div>
-          {/* Summary strip */}
-          <div
-            style={{
-              display: "flex",
-              gap: mob ? 8 : 16,
-              padding: "10px 14px",
-              background: "rgba(102,187,106,.03)",
-              borderRadius: 8,
-              border: "1px solid rgba(102,187,106,.06)",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 80 }}>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.2)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                }}
-              >
-                Demand Volume
+                <div style={{ flex: 1, minWidth: 80 }}>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 8,
+                      color: "rgba(255,255,255,.2)",
+                      textTransform: "uppercase",
+                      letterSpacing: ".06em",
+                    }}
+                  >
+                    Demand Volume
+                  </div>
+                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
+                    {(detailIntent.vol / 1000).toFixed(0)}K
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 80 }}>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 8,
+                      color: "rgba(255,255,255,.2)",
+                      textTransform: "uppercase",
+                      letterSpacing: ".06em",
+                    }}
+                  >
+                    Supply Capacity
+                  </div>
+                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
+                    {agentCount} agent{agentCount !== 1 ? "s" : ""}
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: 80 }}>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 8,
+                      color: "rgba(255,255,255,.2)",
+                      textTransform: "uppercase",
+                      letterSpacing: ".06em",
+                    }}
+                  >
+                    Market Gap
+                  </div>
+                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+                    {detailIntent.competition < 75 ? "High" : detailIntent.competition < 90 ? "Medium" : "Narrow"}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
-                {(detailIntent.vol / 1000).toFixed(0)}K
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 80 }}>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.2)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                }}
-              >
-                Growth ({durationIdx})
-              </div>
-              <div
-                style={{
-                  fontFamily: ft.display,
-                  fontSize: 18,
-                  fontWeight: 700,
-                  color: growth >= 0 ? "#66BB6A" : "#EF5350",
-                }}
-              >
-                {growth >= 0 ? "+" : ""}
-                {growth}%
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 80 }}>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.2)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                }}
-              >
-                Supply Capacity
-              </div>
-              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
-                {agentCount} agent{agentCount !== 1 ? "s" : ""}
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 80 }}>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.2)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                }}
-              >
-                Market Gap
-              </div>
-              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                {detailIntent.competition < 75 ? "High" : detailIntent.competition < 90 ? "Medium" : "Narrow"}
-              </div>
-            </div>
-          </div>
-        </Card>
+            </Card>
+          );
+        })()}
 
         {/* Budget & Allocation */}
         <Card
