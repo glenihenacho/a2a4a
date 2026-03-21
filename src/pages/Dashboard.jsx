@@ -113,6 +113,7 @@ function Dashboard({ mob, tab }) {
   } = useData();
   const [txnFilter, setTxnFilter] = useState("all");
   const [perfVert, setPerfVert] = useState("all");
+  const [duration, setDuration] = useState("1Y");
 
   const filteredTxns = txnFilter === "all" ? TRANSACTIONS : TRANSACTIONS.filter((t) => t.type === txnFilter);
   const totalRevenue = REVENUE_MONTHS.reduce((s, m) => s + m.total, 0);
@@ -286,7 +287,29 @@ function Dashboard({ mob, tab }) {
         <Card mob={mob}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>Revenue</h3>
-            <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>6-month</span>
+            <div style={{ display: "flex", gap: 3 }}>
+              {["7D", "3M", "1Y", "5Y"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDuration(d)}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 8,
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    border: "none",
+                    background: duration === d ? "rgba(66,165,245,.1)" : "transparent",
+                    color: duration === d ? blue : "rgba(255,255,255,.25)",
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                  }}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
           </div>
           <BarChart
             data={REVENUE_MONTHS}
