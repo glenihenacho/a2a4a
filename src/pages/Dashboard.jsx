@@ -673,6 +673,942 @@ function Dashboard({ mob, tab }) {
   );
 }
 
+// ─── UNIVERSAL SIGNAL DETAIL ───
+// Shared detail experience for both Market (intent_market) and Live (live_signals).
+// Shows: indexable popularity chart → related signals → floating bottom budget bar.
+// Budget bar interpolates: first (no budget) → one agent → many agents.
+function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onActivate }) {
+  const [budgetMode, setBudgetMode] = useState(null); // null | "create" | "manage"
+  const [weeklyBudget, setWeeklyBudget] = useState("");
+  const [agentBudgets, setAgentBudgets] = useState({});
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [goingLive, setGoingLive] = useState(false);
+  const [budgetSaved, setBudgetSaved] = useState(false);
+
+  const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
+  const monthlyEst = Math.round(budgetNum * 4.33);
+  const matchingAgents = (agents || []).filter(
+    (a) => a.status === "live" && a.verticals?.some((v) => v.toLowerCase() === signal.vertical?.toLowerCase()),
+  );
+  const totalAllocated = Object.values(agentBudgets).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+  const multiMonthlyEst = Math.round(totalAllocated * 4.33);
+
+  // Determine budget flow: first (no budget), one (single agent), many (multi-agent)
+  const budgetFlow = matchingAgents.length === 0 ? "none" : matchingAgents.length === 1 ? "one" : "many";
+
+  // Chart data — use volTrend if available (market signal), or synthesize from spend7d (live signal)
+  const volTrend = signal.volTrend || signal.spend7d || [15, 18, 21, 24, 27, 30, 35];
+  const competition = signal.competition ?? 65;
+  const d = volTrend;
+  const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
+  const supplyTrend = d.map((v, i) => Math.round((competition / 100) * v * (0.6 + i * 0.06)));
+  const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
+  const chartMax = Math.max(...allVals);
+  const chartMin = Math.min(...allVals);
+  const range = chartMax - chartMin || 1;
+  const chartW = mob ? 280 : 520;
+  const chartH = mob ? 160 : 200;
+  const pad = { top: 16, bottom: 40, left: 40, right: 20 };
+  const plotW = chartW - pad.left - pad.right;
+  const plotH = chartH - pad.top - pad.bottom;
+  const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+  const agentCount = signal.agents || matchingAgents.length || Math.max(1, Math.round(competition / 20));
+  const catColor = signal.catColor || "#78909C";
+
+  const demandPts = d.map((v, i) => ({
+    x: pad.left + (i / (d.length - 1)) * plotW,
+    y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+  }));
+  const supplyPts = supplyTrend.map((v, i) => ({
+    x: pad.left + (i / (d.length - 1)) * plotW,
+    y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
+  }));
+
+  const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
+  const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
+
+  const updateAgentBudgetAmt = (agentId, amount) => {
+    setAgentBudgets((prev) => ({ ...prev, [agentId]: amount }));
+  };
+
+  return (
+    <div style={{ paddingBottom: 80 }}>
+      {/* Back / Close */}
+      <button
+        onClick={onClose}
+        style={{
+          fontFamily: ft.mono,
+          fontSize: 11,
+          color: "rgba(255,255,255,.3)",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          marginBottom: 14,
+          padding: 0,
+        }}
+      >
+        ← Back
+      </button>
+
+      {/* Header */}
+      <div style={{ marginBottom: mob ? 14 : 24 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+          <VBadge v={signal.vertical} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: catColor }} />
+            <span style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)" }}>{signal.category}</span>
+          </div>
+          {signal.opportunity != null && (
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 7,
+                background:
+                  signal.opportunity >= 80
+                    ? "rgba(102,187,106,.1)"
+                    : signal.opportunity >= 60
+                      ? "rgba(255,167,38,.1)"
+                      : "rgba(255,255,255,.04)",
+                border: `1px solid ${signal.opportunity >= 80 ? "rgba(102,187,106,.2)" : signal.opportunity >= 60 ? "rgba(255,167,38,.15)" : "rgba(255,255,255,.06)"}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: ft.display,
+                fontSize: 13,
+                fontWeight: 700,
+                color:
+                  signal.opportunity >= 80 ? "#66BB6A" : signal.opportunity >= 60 ? "#FFA726" : "rgba(255,255,255,.4)",
+              }}
+            >
+              {signal.opportunity}
+            </div>
+          )}
+          {signal.signal != null && (
+            <div
+              style={{
+                fontFamily: ft.display,
+                fontSize: 13,
+                fontWeight: 700,
+                color: signal.signal >= 85 ? "#66BB6A" : signal.signal >= 60 ? "#FFA726" : "rgba(255,255,255,.35)",
+                background:
+                  signal.signal >= 85
+                    ? "rgba(102,187,106,.08)"
+                    : signal.signal >= 60
+                      ? "rgba(255,167,38,.08)"
+                      : "rgba(255,255,255,.03)",
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${signal.signal >= 85 ? "rgba(102,187,106,.15)" : signal.signal >= 60 ? "rgba(255,167,38,.12)" : "rgba(255,255,255,.05)"}`,
+              }}
+            >
+              {signal.signal}
+              <span
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,.2)",
+                  marginLeft: 3,
+                }}
+              >
+                SIG
+              </span>
+            </div>
+          )}
+          <span
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#66BB6A",
+              background: "rgba(102,187,106,.06)",
+              padding: "2px 8px",
+              borderRadius: 4,
+            }}
+          >
+            {growth >= 0 ? "+" : ""}
+            {growth}%
+          </span>
+        </div>
+        <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 26, fontWeight: 700, lineHeight: 1.2 }}>
+          {signal.query}
+        </h2>
+        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
+          {signal.id} · {signal.status ? `Status: ${signal.status}` : "Last indexed Feb 24, 2025"}
+        </div>
+      </div>
+
+      {/* Indexable Popularity Chart */}
+      <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
+              Indexable Popularity
+            </h3>
+            <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
+              6-month supply & demand trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
+              <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
+              <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
+          <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
+            <defs>
+              <linearGradient id={`uniDemFill${signal.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={blue} stopOpacity=".15" />
+                <stop offset="100%" stopColor={blue} stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id={`uniSupFill${signal.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
+                <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
+              const yy = pad.top + plotH * (1 - pct);
+              const val = chartMin + range * pct;
+              return (
+                <g key={i}>
+                  <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
+                  <text
+                    x={pad.left - 4}
+                    y={yy + 3}
+                    textAnchor="end"
+                    fill="rgba(255,255,255,.12)"
+                    style={{ fontFamily: ft.mono, fontSize: 7 }}
+                  >
+                    {(val / 1000).toFixed(0)}K
+                  </text>
+                </g>
+              );
+            })}
+            <path d={supplyArea} fill={`url(#uniSupFill${signal.id})`} />
+            <path
+              d={supplyLine}
+              fill="none"
+              stroke="#FFA726"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray="6 3"
+            />
+            <path d={demandArea} fill={`url(#uniDemFill${signal.id})`} />
+            <path
+              d={demandLine}
+              fill="none"
+              stroke={blue}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            {demandPts.map((p, i) => (
+              <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
+            ))}
+            {supplyPts.map((p, i) => (
+              <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
+            ))}
+            {(() => {
+              const dLast = demandPts[demandPts.length - 1];
+              const sLast = supplyPts[supplyPts.length - 1];
+              const gap = Math.abs(dLast.y - sLast.y);
+              if (gap < 8) return null;
+              const midY = (dLast.y + sLast.y) / 2;
+              return (
+                <>
+                  <line
+                    x1={dLast.x + 8}
+                    y1={dLast.y}
+                    x2={dLast.x + 8}
+                    y2={sLast.y}
+                    stroke="rgba(102,187,106,.3)"
+                    strokeWidth={1}
+                    strokeDasharray="2 2"
+                  />
+                  <text
+                    x={dLast.x + 14}
+                    y={midY + 3}
+                    fill="#66BB6A"
+                    style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
+                  >
+                    GAP
+                  </text>
+                </>
+              );
+            })()}
+            {months.slice(0, d.length).map((m, i) => (
+              <text
+                key={`m${i}`}
+                x={demandPts[i].x}
+                y={chartH - 4}
+                textAnchor="middle"
+                fill="rgba(255,255,255,.15)"
+                style={{ fontFamily: ft.mono, fontSize: 8 }}
+              >
+                {m}
+              </text>
+            ))}
+          </svg>
+        </div>
+        {/* Summary strip */}
+        <div
+          style={{
+            display: "flex",
+            gap: mob ? 8 : 16,
+            marginTop: 14,
+            padding: "10px 14px",
+            background: "rgba(102,187,106,.03)",
+            borderRadius: 8,
+            border: "1px solid rgba(102,187,106,.06)",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 80 }}>
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                color: "rgba(255,255,255,.2)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+              }}
+            >
+              Demand Volume
+            </div>
+            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
+              {signal.vol
+                ? `${(signal.vol / 1000).toFixed(0)}K`
+                : signal.impressions
+                  ? `${(signal.impressions / 1000).toFixed(1)}K`
+                  : `${d[d.length - 1]}K`}
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 80 }}>
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                color: "rgba(255,255,255,.2)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+              }}
+            >
+              Supply Capacity
+            </div>
+            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
+              {agentCount} agent{agentCount !== 1 ? "s" : ""}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 80 }}>
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                color: "rgba(255,255,255,.2)",
+                textTransform: "uppercase",
+                letterSpacing: ".06em",
+              }}
+            >
+              Market Gap
+            </div>
+            <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
+              {competition < 75 ? "High" : competition < 90 ? "Medium" : "Narrow"}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Related Signals */}
+      {relatedSignals && relatedSignals.length > 0 && (
+        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24 }}>
+          <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Related Signals</h3>
+          <div style={{ display: "grid", gap: 6, overflow: "hidden" }}>
+            {relatedSignals.map((r) => {
+              const score = r.opportunity || r.signal || 0;
+              return (
+                <div
+                  key={r.id}
+                  onClick={() => onActivate?.(r)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "10px 12px",
+                    background: "rgba(255,255,255,.015)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,.03)",
+                    overflow: "hidden",
+                    cursor: onActivate ? "pointer" : "default",
+                    transition: "border-color .2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (onActivate) e.currentTarget.style.borderColor = "rgba(66,165,245,.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (onActivate) e.currentTarget.style.borderColor = "rgba(255,255,255,.03)";
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background:
+                        score >= 80
+                          ? "rgba(102,187,106,.08)"
+                          : score >= 60
+                            ? "rgba(255,167,38,.08)"
+                            : "rgba(66,165,245,.06)",
+                      border: `1px solid ${score >= 80 ? "rgba(102,187,106,.15)" : score >= 60 ? "rgba(255,167,38,.15)" : "rgba(66,165,245,.08)"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontFamily: ft.mono,
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: score >= 80 ? "#66BB6A" : score >= 60 ? "#FFA726" : blue,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {score}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.query || r.queries}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
+                      <VBadge v={r.vertical} />
+                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
+                        {r.budget || (r.avgSpend ? `$${r.avgSpend.toLocaleString()}/mo` : r.category)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* ─── FLOATING FIXED BUDGET BAR ─── */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 999,
+          background: "linear-gradient(180deg, rgba(6,10,18,0) 0%, rgba(6,10,18,.95) 20%, rgba(6,10,18,.99) 100%)",
+          padding: mob ? "20px 16px 16px" : "20px 32px 20px",
+        }}
+      >
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          {/* Collapsed state — just the CTA button */}
+          {!budgetMode && (
+            <button
+              onClick={() => setBudgetMode("create")}
+              style={{
+                width: "100%",
+                fontFamily: ft.display,
+                fontSize: 16,
+                fontWeight: 700,
+                color: "#fff",
+                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                border: "none",
+                padding: "14px 0",
+                borderRadius: 12,
+                cursor: "pointer",
+                boxShadow: "0 4px 24px rgba(66,165,245,.25)",
+              }}
+            >
+              {budgetSaved ? "Manage Budget" : budgetFlow === "many" ? "Create Multi-Agent Budget" : "Create Budget"} →
+            </button>
+          )}
+
+          {/* Expanded — Budget creation/management panel */}
+          {budgetMode === "create" && (
+            <div
+              style={{
+                background: "rgba(10,15,26,.98)",
+                border: "1px solid rgba(66,165,245,.12)",
+                borderRadius: 14,
+                padding: mob ? 16 : 20,
+                boxShadow: "0 -8px 40px rgba(0,0,0,.5)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div>
+                  <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700 }}>
+                    {budgetFlow === "many" ? "Agent Budget Allocation" : "Set Weekly Budget"}
+                  </h3>
+                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)", marginTop: 2 }}>
+                    {budgetFlow === "many"
+                      ? `${matchingAgents.length} ${signal.vertical} agents available`
+                      : "Budget held in escrow · SLA-enforced delivery"}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setBudgetMode(null)}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 14,
+                    color: "rgba(255,255,255,.2)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "2px 6px",
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {budgetFlow === "one" || budgetFlow === "none" ? (
+                /* ─── SINGLE AGENT / SIMPLE BUDGET ─── */
+                <>
+                  {!budgetSaved ? (
+                    <div>
+                      <div
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          color: "rgba(255,255,255,.25)",
+                          textTransform: "uppercase",
+                          letterSpacing: ".08em",
+                          marginBottom: 8,
+                        }}
+                      >
+                        Weekly Budget (USD)
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                        <div style={{ flex: 1, position: "relative" }}>
+                          <span
+                            style={{
+                              position: "absolute",
+                              left: 14,
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              fontFamily: ft.display,
+                              fontSize: 18,
+                              fontWeight: 700,
+                              color: "rgba(255,255,255,.15)",
+                            }}
+                          >
+                            $
+                          </span>
+                          <input
+                            value={weeklyBudget}
+                            onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="500"
+                            autoFocus
+                            style={{
+                              width: "100%",
+                              fontFamily: ft.display,
+                              fontSize: 22,
+                              fontWeight: 700,
+                              background: "rgba(0,0,0,.25)",
+                              border: "1px solid rgba(66,165,245,.12)",
+                              borderRadius: 10,
+                              padding: "12px 14px 12px 32px",
+                              color: "#E3F2FD",
+                              outline: "none",
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                        {[250, 500, 1000, 2000, 5000].map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => setWeeklyBudget(String(v))}
+                            style={{
+                              fontFamily: ft.mono,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
+                              background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
+                              border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
+                              padding: "5px 10px",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                            }}
+                          >
+                            ${v.toLocaleString()}
+                          </button>
+                        ))}
+                      </div>
+                      {budgetNum > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            background: "rgba(255,255,255,.015)",
+                            borderRadius: 8,
+                            marginBottom: 10,
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontFamily: ft.mono,
+                                fontSize: 8,
+                                color: "rgba(255,255,255,.2)",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Monthly
+                            </div>
+                            <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#E3F2FD" }}>
+                              ${monthlyEst.toLocaleString()}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div
+                              style={{
+                                fontFamily: ft.mono,
+                                fontSize: 8,
+                                color: "rgba(255,255,255,.2)",
+                                textTransform: "uppercase",
+                              }}
+                            >
+                              Cost/1K
+                            </div>
+                            <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
+                              ${signal.vol > 0 ? (monthlyEst / (signal.vol / 1000)).toFixed(2) : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {matchingAgents.length === 1 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              flex: 1,
+                              padding: "8px 10px",
+                              background: "rgba(66,165,245,.03)",
+                              borderRadius: 8,
+                              border: "1px solid rgba(66,165,245,.08)",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: 7,
+                                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontFamily: ft.display,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {matchingAgents[0].name?.charAt(0)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 700 }}>{matchingAgents[0].name}</div>
+                              <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                                Rep {matchingAgents[0].stats?.reputation || 0}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (budgetNum > 0) {
+                            setGoingLive(true);
+                            if (matchingAgents.length === 1) setSelectedAgent(matchingAgents[0]);
+                            setTimeout(() => {
+                              setBudgetSaved(true);
+                              setGoingLive(false);
+                              setBudgetMode(null);
+                            }, 1200);
+                          }
+                        }}
+                        disabled={budgetNum <= 0}
+                        style={{
+                          width: "100%",
+                          fontFamily: ft.display,
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: "#fff",
+                          background:
+                            budgetNum > 0
+                              ? goingLive
+                                ? "rgba(66,165,245,.15)"
+                                : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                              : "rgba(255,255,255,.04)",
+                          border: "none",
+                          padding: "12px 0",
+                          borderRadius: 10,
+                          cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
+                          opacity: budgetNum > 0 ? 1 : 0.4,
+                          transition: "all .3s",
+                          marginTop: 10,
+                        }}
+                      >
+                        {goingLive
+                          ? "Activating..."
+                          : matchingAgents.length === 1
+                            ? `Go Live with ${matchingAgents[0].name} →`
+                            : "Go Live →"}
+                      </button>
+                    </div>
+                  ) : (
+                    /* ─── BUDGET SAVED — AGENT SELECTION (multi-agent from single budget) ─── */
+                    <div>
+                      <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            background: "rgba(102,187,106,.1)",
+                            border: "1px solid rgba(102,187,106,.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 18,
+                            margin: "0 auto 8px",
+                          }}
+                        >
+                          ✓
+                        </div>
+                        <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#66BB6A" }}>
+                          Budget Active
+                        </div>
+                        <div
+                          style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 2 }}
+                        >
+                          ${budgetNum.toLocaleString()}/week{selectedAgent ? ` · ${selectedAgent.name}` : ""}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setBudgetSaved(false);
+                          setSelectedAgent(null);
+                        }}
+                        style={{
+                          width: "100%",
+                          fontFamily: ft.mono,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: "rgba(255,255,255,.3)",
+                          background: "rgba(255,255,255,.02)",
+                          border: "1px solid rgba(255,255,255,.04)",
+                          padding: "8px 0",
+                          borderRadius: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit Budget
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ─── MANY AGENTS — MULTI-AGENT BUDGET ALLOCATION ─── */
+                <div>
+                  <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                    {matchingAgents.map((agent) => {
+                      const val = agentBudgets[agent.id] || "";
+                      return (
+                        <div
+                          key={agent.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            padding: "8px 10px",
+                            background: "rgba(255,255,255,.015)",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255,255,255,.03)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 7,
+                              background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontFamily: ft.display,
+                              fontSize: 11,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {agent.name?.charAt(0)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {agent.name}
+                            </div>
+                            <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                              Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                            </div>
+                          </div>
+                          <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                            <span
+                              style={{
+                                position: "absolute",
+                                left: 8,
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                fontFamily: ft.mono,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: "rgba(255,255,255,.15)",
+                              }}
+                            >
+                              $
+                            </span>
+                            <input
+                              value={val}
+                              onChange={(e) => updateAgentBudgetAmt(agent.id, e.target.value.replace(/[^0-9]/g, ""))}
+                              placeholder="0"
+                              style={{
+                                width: "100%",
+                                fontFamily: ft.mono,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                background: "rgba(0,0,0,.25)",
+                                border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
+                                borderRadius: 6,
+                                padding: "6px 8px 6px 20px",
+                                color: "#E3F2FD",
+                                outline: "none",
+                                textAlign: "right",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {totalAllocated > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 10px",
+                        background: "rgba(66,165,245,.03)",
+                        borderRadius: 6,
+                        border: "1px solid rgba(66,165,245,.08)",
+                        marginBottom: 10,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 9,
+                          color: "rgba(255,255,255,.25)",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        Total · ${totalAllocated.toLocaleString()}/wk
+                      </span>
+                      <span style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, color: blue }}>
+                        ${multiMonthlyEst.toLocaleString()}/mo
+                      </span>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (totalAllocated > 0) {
+                        setGoingLive(true);
+                        setTimeout(() => {
+                          setBudgetSaved(true);
+                          setGoingLive(false);
+                          setBudgetMode(null);
+                        }, 1200);
+                      }
+                    }}
+                    disabled={totalAllocated <= 0}
+                    style={{
+                      width: "100%",
+                      fontFamily: ft.display,
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#fff",
+                      background:
+                        totalAllocated > 0
+                          ? goingLive
+                            ? "rgba(66,165,245,.15)"
+                            : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                          : "rgba(255,255,255,.04)",
+                      border: "none",
+                      padding: "12px 0",
+                      borderRadius: 10,
+                      cursor: totalAllocated > 0 && !goingLive ? "pointer" : "not-allowed",
+                      opacity: totalAllocated > 0 ? 1 : 0.4,
+                      transition: "all .3s",
+                    }}
+                  >
+                    {goingLive
+                      ? "Activating..."
+                      : `Allocate Budget to ${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length} Agent${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length !== 1 ? "s" : ""} →`}
+                  </button>
+                </div>
+              )}
+
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.1)",
+                  textAlign: "center",
+                  marginTop: 8,
+                }}
+              >
+                Budget held in escrow · Agents bid competitively · SLA-enforced delivery
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── INTENTS (Market Data) ───
 function Intents({ mob, tab }) {
   const {
@@ -681,7 +1617,6 @@ function Intents({ mob, tab }) {
     trendingUp: TRENDING_UP,
     intents: MOCK_INTENTS,
     statusCfg: STATUS_CFG,
-    signals: LIVE_SIGNALS,
     agents: ALL_AGENTS,
   } = useData();
   const [industryTags, setIndustryTags] = useState([]);
@@ -694,10 +1629,6 @@ function Intents({ mob, tab }) {
   const [qSearch, setQSearch] = useState("");
   const [qOpen, setQOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
-  const [weeklyBudget, setWeeklyBudget] = useState("");
-  const [budgetSaved, setBudgetSaved] = useState(false);
-  const [goingLive, setGoingLive] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState(null);
   const industryRef = useRef(null);
 
   const industrySuggestions = useMemo(() => {
@@ -786,824 +1717,52 @@ function Intents({ mob, tab }) {
     );
   }
 
-  // ─── DETAIL PAGE ───
+  // ─── DETAIL PAGE (Universal SignalDetail) ───
   const detailIntent = detailId ? INTENT_MARKET.find((i) => i.id === detailId) : null;
 
   if (detailIntent) {
-    const d = detailIntent.volTrend;
-    const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
     const catColor = INTENT_CATEGORIES.find((c) => c.name === detailIntent.category)?.color || "#78909C";
-    const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
-    const monthlyEst = Math.round(budgetNum * 4.33);
-
-    // Matching signal for agent count
-    const matchSignal = LIVE_SIGNALS?.find((s) =>
-      s.query?.toLowerCase().includes(detailIntent.query.split(" ")[0].toLowerCase()),
-    );
-    const agentCount = matchSignal?.agents || Math.max(1, Math.round(detailIntent.competition / 20));
 
     // Matching agents for this intent's vertical
-    const matchingAgents = (ALL_AGENTS || []).filter(
-      (a) => a.status === "live" && a.verticals?.some((v) => v.toLowerCase() === detailIntent.vertical?.toLowerCase()),
-    );
+    // Related signals — same vertical from MOCK_INTENTS + other INTENT_MARKET items
+    const relatedSignals = [
+      ...MOCK_INTENTS.filter((i) => i.vertical === detailIntent.vertical).map((r) => {
+        const mm = INTENT_MARKET?.find(
+          (m) =>
+            m.query?.toLowerCase().includes(r.queries.split(" ")[0].toLowerCase()) ||
+            r.queries.toLowerCase().includes(m.query?.split(" ")[0].toLowerCase()),
+        );
+        return {
+          id: r.id,
+          query: r.queries,
+          vertical: r.vertical,
+          budget: r.budget,
+          opportunity: mm?.opportunity || Math.min(99, (r.bids || 1) * 18 + 20),
+          category: r.business,
+        };
+      }),
+      ...INTENT_MARKET.filter((m) => m.vertical === detailIntent.vertical && m.id !== detailIntent.id)
+        .slice(0, 3)
+        .map((m) => ({
+          id: `mkt-${m.id}`,
+          query: m.query,
+          vertical: m.vertical,
+          opportunity: m.opportunity,
+          category: m.category,
+        })),
+    ].slice(0, 5);
 
     return (
-      <div>
-        <button
-          onClick={() => {
-            setDetailId(null);
-            setWeeklyBudget("");
-            setBudgetSaved(false);
-            setGoingLive(false);
-            setSelectedAgent(null);
-          }}
-          style={{
-            fontFamily: ft.mono,
-            fontSize: 11,
-            color: "rgba(255,255,255,.3)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            marginBottom: 14,
-            padding: 0,
-          }}
-        >
-          ← Intent Market
-        </button>
-
-        {/* Header */}
-        <div style={{ marginBottom: mob ? 14 : 24 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
-            <VBadge v={detailIntent.vertical} />
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: catColor }} />
-              <span style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)" }}>
-                {detailIntent.category}
-              </span>
-            </div>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 7,
-                background:
-                  detailIntent.opportunity >= 80
-                    ? "rgba(102,187,106,.1)"
-                    : detailIntent.opportunity >= 60
-                      ? "rgba(255,167,38,.1)"
-                      : "rgba(255,255,255,.04)",
-                border: `1px solid ${detailIntent.opportunity >= 80 ? "rgba(102,187,106,.2)" : detailIntent.opportunity >= 60 ? "rgba(255,167,38,.15)" : "rgba(255,255,255,.06)"}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: ft.display,
-                fontSize: 13,
-                fontWeight: 700,
-                color:
-                  detailIntent.opportunity >= 80
-                    ? "#66BB6A"
-                    : detailIntent.opportunity >= 60
-                      ? "#FFA726"
-                      : "rgba(255,255,255,.4)",
-              }}
-            >
-              {detailIntent.opportunity}
-            </div>
-          </div>
-          <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 26, fontWeight: 700, lineHeight: 1.2 }}>
-            {detailIntent.query}
-          </h2>
-          <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
-            ID: INTENT-{String(detailIntent.id).padStart(3, "0")} · Last indexed Feb 24, 2025
-          </div>
-        </div>
-
-        {/* Indexable Popularity — Supply vs Demand chart */}
-        {(() => {
-          const supplyTrend = d.map((v, i) => Math.round((detailIntent.competition / 100) * v * (0.6 + i * 0.06)));
-          const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
-          const chartMax = Math.max(...allVals);
-          const chartMin = Math.min(...allVals);
-          const range = chartMax - chartMin || 1;
-          const chartW = mob ? 280 : 520;
-          const chartH = mob ? 160 : 200;
-          const pad = { top: 16, bottom: 40, left: 40, right: 20 };
-          const plotW = chartW - pad.left - pad.right;
-          const plotH = chartH - pad.top - pad.bottom;
-          const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-
-          const demandPts = d.map((v, i) => ({
-            x: pad.left + (i / (d.length - 1)) * plotW,
-            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-          }));
-          const supplyPts = supplyTrend.map((v, i) => ({
-            x: pad.left + (i / (d.length - 1)) * plotW,
-            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-          }));
-
-          const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-          const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-          const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
-          const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
-
-          return (
-            <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div>
-                  <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
-                    Indexable Popularity
-                  </h3>
-                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
-                    6-month supply & demand trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
-                    <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
-                    <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: growth >= 0 ? "#66BB6A" : "#EF5350",
-                      background: growth >= 0 ? "rgba(102,187,106,.06)" : "rgba(239,83,80,.06)",
-                      padding: "3px 10px",
-                      borderRadius: 5,
-                    }}
-                  >
-                    {growth >= 0 ? "+" : ""}
-                    {growth}%
-                  </div>
-                </div>
-              </div>
-              {/* Chart */}
-              <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
-                <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
-                  <defs>
-                    <linearGradient id={`detDemFill${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={blue} stopOpacity=".15" />
-                      <stop offset="100%" stopColor={blue} stopOpacity="0" />
-                    </linearGradient>
-                    <linearGradient id={`detSupFill${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
-                      <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  {/* Grid lines */}
-                  {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
-                    const yy = pad.top + plotH * (1 - pct);
-                    const val = chartMin + range * pct;
-                    return (
-                      <g key={i}>
-                        <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
-                        <text
-                          x={pad.left - 4}
-                          y={yy + 3}
-                          textAnchor="end"
-                          fill="rgba(255,255,255,.12)"
-                          style={{ fontFamily: ft.mono, fontSize: 7 }}
-                        >
-                          {(val / 1000).toFixed(0)}K
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {/* Supply area + line */}
-                  <path d={supplyArea} fill={`url(#detSupFill${detailIntent.id})`} />
-                  <path
-                    d={supplyLine}
-                    fill="none"
-                    stroke="#FFA726"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="6 3"
-                  />
-                  {/* Demand area + line */}
-                  <path d={demandArea} fill={`url(#detDemFill${detailIntent.id})`} />
-                  <path
-                    d={demandLine}
-                    fill="none"
-                    stroke={blue}
-                    strokeWidth={2.5}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {/* Demand dots */}
-                  {demandPts.map((p, i) => (
-                    <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
-                  ))}
-                  {/* Supply dots */}
-                  {supplyPts.map((p, i) => (
-                    <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
-                  ))}
-                  {/* Gap highlight at last point */}
-                  {(() => {
-                    const dLast = demandPts[demandPts.length - 1];
-                    const sLast = supplyPts[supplyPts.length - 1];
-                    const gap = Math.abs(dLast.y - sLast.y);
-                    if (gap < 8) return null;
-                    const midY = (dLast.y + sLast.y) / 2;
-                    return (
-                      <>
-                        <line
-                          x1={dLast.x + 8}
-                          y1={dLast.y}
-                          x2={dLast.x + 8}
-                          y2={sLast.y}
-                          stroke="rgba(102,187,106,.3)"
-                          strokeWidth={1}
-                          strokeDasharray="2 2"
-                        />
-                        <text
-                          x={dLast.x + 14}
-                          y={midY + 3}
-                          fill="#66BB6A"
-                          style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
-                        >
-                          GAP
-                        </text>
-                      </>
-                    );
-                  })()}
-                  {/* X-axis labels */}
-                  {months.slice(0, d.length).map((m, i) => (
-                    <text
-                      key={`m${i}`}
-                      x={demandPts[i].x}
-                      y={chartH - 4}
-                      textAnchor="middle"
-                      fill="rgba(255,255,255,.15)"
-                      style={{ fontFamily: ft.mono, fontSize: 8 }}
-                    >
-                      {m}
-                    </text>
-                  ))}
-                </svg>
-              </div>
-              {/* Summary strip */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: mob ? 8 : 16,
-                  marginTop: 14,
-                  padding: "10px 14px",
-                  background: "rgba(102,187,106,.03)",
-                  borderRadius: 8,
-                  border: "1px solid rgba(102,187,106,.06)",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 80 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "rgba(255,255,255,.2)",
-                      textTransform: "uppercase",
-                      letterSpacing: ".06em",
-                    }}
-                  >
-                    Demand Volume
-                  </div>
-                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
-                    {(detailIntent.vol / 1000).toFixed(0)}K
-                    <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 80 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "rgba(255,255,255,.2)",
-                      textTransform: "uppercase",
-                      letterSpacing: ".06em",
-                    }}
-                  >
-                    Supply Capacity
-                  </div>
-                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
-                    {agentCount} agent{agentCount !== 1 ? "s" : ""}
-                  </div>
-                </div>
-                <div style={{ flex: 1, minWidth: 80 }}>
-                  <div
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "rgba(255,255,255,.2)",
-                      textTransform: "uppercase",
-                      letterSpacing: ".06em",
-                    }}
-                  >
-                    Market Gap
-                  </div>
-                  <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                    {detailIntent.competition < 75 ? "High" : detailIntent.competition < 90 ? "Medium" : "Narrow"}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          );
-        })()}
-
-        {/* Budget & Allocation */}
-        <Card
-          mob={mob}
-          style={{
-            marginBottom: mob ? 14 : 24,
-            background: budgetSaved ? "rgba(102,187,106,.02)" : goingLive ? "rgba(66,165,245,.02)" : undefined,
-            borderColor: budgetSaved ? "rgba(102,187,106,.12)" : goingLive ? "rgba(66,165,245,.12)" : undefined,
-          }}
-        >
-          <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-            Budget & Activation
-          </h3>
-          <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)", marginBottom: 16 }}>
-            Set a weekly budget to activate this intent as a live signal
-          </div>
-
-          {budgetSaved && !selectedAgent ? (
-            /* ─── Agent Selection Step ─── */
-            <div>
-              <div style={{ textAlign: "center", padding: "12px 0 14px" }}>
-                <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
-                  Select an Agent
-                </div>
-                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 4 }}>
-                  ${budgetNum.toLocaleString()}/week · {matchingAgents.length} agent
-                  {matchingAgents.length !== 1 ? "s" : ""} available
-                </div>
-              </div>
-              <div style={{ display: "grid", gap: 8 }}>
-                {matchingAgents.map((agent) => (
-                  <div
-                    key={agent.id}
-                    onClick={() => setSelectedAgent(agent)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: "12px 14px",
-                      background: "rgba(255,255,255,.02)",
-                      border: "1px solid rgba(66,165,245,.08)",
-                      borderRadius: 10,
-                      cursor: "pointer",
-                      transition: "all .2s",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "rgba(66,165,245,.04)";
-                      e.currentTarget.style.borderColor = "rgba(66,165,245,.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "rgba(255,255,255,.02)";
-                      e.currentTarget.style.borderColor = "rgba(66,165,245,.08)";
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontFamily: ft.display,
-                        fontSize: 14,
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {agent.name?.charAt(0)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 2 }}>{agent.name}</div>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        {agent.verticals?.map((v) => (
-                          <VBadge key={v} v={v} />
-                        ))}
-                        <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
-                          {agent.stats?.successRate}% success
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: ft.display,
-                          fontSize: 18,
-                          fontWeight: 700,
-                          color: agent.stats?.reputation >= 90 ? "#66BB6A" : "#FFA726",
-                        }}
-                      >
-                        {agent.stats?.reputation || 0}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.15)",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Rep
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  setBudgetSaved(false);
-                  setGoingLive(false);
-                }}
-                style={{
-                  width: "100%",
-                  fontFamily: ft.mono,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,.3)",
-                  background: "rgba(255,255,255,.02)",
-                  border: "1px solid rgba(255,255,255,.04)",
-                  padding: "10px 0",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  marginTop: 10,
-                }}
-              >
-                ← Edit Budget
-              </button>
-            </div>
-          ) : budgetSaved && selectedAgent ? (
-            /* ─── Confirmed State ─── */
-            <div>
-              <div style={{ textAlign: "center", padding: "20px 0 16px" }}>
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 12,
-                    background: "rgba(102,187,106,.1)",
-                    border: "1px solid rgba(102,187,106,.2)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 22,
-                    margin: "0 auto 12px",
-                  }}
-                >
-                  ✓
-                </div>
-                <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                  Intent Live
-                </div>
-                <div style={{ fontFamily: ft.mono, fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 4 }}>
-                  ${budgetNum.toLocaleString()}/week · {selectedAgent.name}
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "10px 12px",
-                  background: "rgba(102,187,106,.03)",
-                  border: "1px solid rgba(102,187,106,.1)",
-                  borderRadius: 8,
-                  marginBottom: 12,
-                }}
-              >
-                <div
-                  style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 8,
-                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontFamily: ft.display,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}
-                >
-                  {selectedAgent.name?.charAt(0)}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700 }}>{selectedAgent.name}</div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
-                    Rep {selectedAgent.stats?.reputation} · {selectedAgent.stats?.successRate}% success
-                  </div>
-                </div>
-                <Badge color="#66BB6A" bg="rgba(102,187,106,.1)">
-                  Engaged
-                </Badge>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => setSelectedAgent(null)}
-                  style={{
-                    flex: 1,
-                    fontFamily: ft.mono,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "rgba(255,255,255,.35)",
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.06)",
-                    padding: "10px 0",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  Change Agent
-                </button>
-                <button
-                  onClick={() => {
-                    setDetailId(null);
-                    setWeeklyBudget("");
-                    setBudgetSaved(false);
-                    setSelectedAgent(null);
-                  }}
-                  style={{
-                    flex: 1,
-                    fontFamily: ft.mono,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: blue,
-                    background: "rgba(66,165,245,.06)",
-                    border: "1px solid rgba(66,165,245,.12)",
-                    padding: "10px 0",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  View in Live →
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 9,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,.25)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".08em",
-                  marginBottom: 8,
-                }}
-              >
-                Weekly Budget (USD)
-              </div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                <div style={{ flex: 1, position: "relative" }}>
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: 14,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      fontFamily: ft.display,
-                      fontSize: 18,
-                      fontWeight: 700,
-                      color: "rgba(255,255,255,.15)",
-                    }}
-                  >
-                    $
-                  </span>
-                  <input
-                    value={weeklyBudget}
-                    onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="500"
-                    style={{
-                      width: "100%",
-                      fontFamily: ft.display,
-                      fontSize: 22,
-                      fontWeight: 700,
-                      background: "rgba(0,0,0,.25)",
-                      border: "1px solid rgba(66,165,245,.12)",
-                      borderRadius: 10,
-                      padding: "14px 14px 14px 32px",
-                      color: "#E3F2FD",
-                      outline: "none",
-                      textAlign: "left",
-                    }}
-                  />
-                </div>
-              </div>
-              {/* Quick budget pills */}
-              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-                {[250, 500, 1000, 2000, 5000].map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setWeeklyBudget(String(v))}
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
-                      background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
-                      border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
-                      padding: "6px 12px",
-                      borderRadius: 6,
-                      cursor: "pointer",
-                    }}
-                  >
-                    ${v.toLocaleString()}
-                  </button>
-                ))}
-              </div>
-              {/* Monthly estimate */}
-              {budgetNum > 0 && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    padding: "10px 14px",
-                    background: "rgba(255,255,255,.015)",
-                    borderRadius: 8,
-                    marginBottom: 14,
-                  }}
-                >
-                  <div>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 9,
-                        color: "rgba(255,255,255,.2)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Monthly Estimate
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: ft.display,
-                        fontSize: 18,
-                        fontWeight: 700,
-                        color: "#E3F2FD",
-                        marginTop: 2,
-                      }}
-                    >
-                      ${monthlyEst.toLocaleString()}
-                      <span
-                        style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 400, color: "rgba(255,255,255,.2)" }}
-                      >
-                        /mo
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 9,
-                        color: "rgba(255,255,255,.2)",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      Cost per 1K Impressions
-                    </div>
-                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue, marginTop: 2 }}>
-                      ${detailIntent.vol > 0 ? (monthlyEst / (detailIntent.vol / 1000)).toFixed(2) : "—"}
-                    </div>
-                  </div>
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  if (budgetNum > 0) {
-                    setGoingLive(true);
-                    setTimeout(() => setBudgetSaved(true), 1200);
-                  }
-                }}
-                disabled={budgetNum <= 0}
-                style={{
-                  width: "100%",
-                  fontFamily: ft.display,
-                  fontSize: 16,
-                  fontWeight: 700,
-                  color: "#fff",
-                  background:
-                    budgetNum > 0
-                      ? goingLive
-                        ? "rgba(66,165,245,.15)"
-                        : `linear-gradient(135deg, ${blueDeep}, ${blue})`
-                      : "rgba(255,255,255,.04)",
-                  border: "none",
-                  padding: "14px 0",
-                  borderRadius: 10,
-                  cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
-                  opacity: budgetNum > 0 ? 1 : 0.4,
-                  transition: "all .3s",
-                }}
-              >
-                {goingLive ? "Activating..." : "Go Live →"}
-              </button>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 9,
-                  color: "rgba(255,255,255,.12)",
-                  textAlign: "center",
-                  marginTop: 8,
-                }}
-              >
-                Budget held in escrow · Agents bid competitively · SLA-enforced delivery
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Related SMB Requests */}
-        {(() => {
-          const related = MOCK_INTENTS.filter((i) => i.vertical === detailIntent.vertical);
-          if (!related.length) return null;
-          return (
-            <Card mob={mob}>
-              <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>
-                Related SMB Requests
-              </h3>
-              <div style={{ display: "grid", gap: 6, overflow: "hidden" }}>
-                {related.map((r) => {
-                  const mm = INTENT_MARKET?.find(
-                    (m) =>
-                      m.query?.toLowerCase().includes(r.queries.split(" ")[0].toLowerCase()) ||
-                      r.queries.toLowerCase().includes(m.query?.split(" ")[0].toLowerCase()),
-                  );
-                  const opp = mm?.opportunity || Math.min(99, (r.bids || 1) * 18 + 20);
-                  return (
-                    <div
-                      key={r.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 12,
-                        padding: "10px 12px",
-                        background: "rgba(255,255,255,.015)",
-                        borderRadius: 8,
-                        border: "1px solid rgba(255,255,255,.03)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 8,
-                          background:
-                            opp >= 80
-                              ? "rgba(102,187,106,.08)"
-                              : opp >= 60
-                                ? "rgba(255,167,38,.08)"
-                                : "rgba(66,165,245,.06)",
-                          border: `1px solid ${opp >= 80 ? "rgba(102,187,106,.15)" : opp >= 60 ? "rgba(255,167,38,.15)" : "rgba(66,165,245,.08)"}`,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontFamily: ft.mono,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: opp >= 80 ? "#66BB6A" : opp >= 60 ? "#FFA726" : blue,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {opp}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 600,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {r.queries}
-                        </div>
-                        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>
-                          {r.budget}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          );
-        })()}
-      </div>
+      <SignalDetail
+        signal={{ ...detailIntent, catColor }}
+        agents={ALL_AGENTS}
+        relatedSignals={relatedSignals}
+        mob={mob}
+        tab={tab}
+        onClose={() => {
+          setDetailId(null);
+        }}
+      />
     );
   }
 
@@ -1794,9 +1953,6 @@ function Intents({ mob, tab }) {
                   onClick={() => {
                     if (item.market) {
                       setDetailId(item.market.id);
-                      setWeeklyBudget("");
-                      setBudgetSaved(false);
-                      setGoingLive(false);
                     }
                     setQOpen(false);
                     setQSearch(item.label);
@@ -2020,9 +2176,6 @@ function Intents({ mob, tab }) {
                         onClick={() => {
                           if (matchedMarket) {
                             setDetailId(matchedMarket.id);
-                            setWeeklyBudget("");
-                            setBudgetSaved(false);
-                            setGoingLive(false);
                           }
                         }}
                         style={{
@@ -2077,9 +2230,6 @@ function Intents({ mob, tab }) {
                   onClick={() => {
                     if (matchedMarket) {
                       setDetailId(matchedMarket.id);
-                      setWeeklyBudget("");
-                      setBudgetSaved(false);
-                      setGoingLive(false);
                     }
                   }}
                   style={{
@@ -2353,9 +2503,6 @@ function Intents({ mob, tab }) {
               key={intent.id}
               onClick={() => {
                 setDetailId(intent.id);
-                setWeeklyBudget("");
-                setBudgetSaved(false);
-                setGoingLive(false);
               }}
               style={{
                 background: "rgba(255,255,255,.02)",
@@ -2625,9 +2772,6 @@ function Intents({ mob, tab }) {
                     key={intent.id}
                     onClick={() => {
                       setDetailId(intent.id);
-                      setWeeklyBudget("");
-                      setBudgetSaved(false);
-                      setGoingLive(false);
                     }}
                     style={{
                       borderBottom: "1px solid rgba(255,255,255,.02)",
@@ -2774,513 +2918,55 @@ function Intents({ mob, tab }) {
         </Card>
       )}
 
-      {/* FOCUSED DEMAND — Supply & Demand Popularity + Budget + Related */}
+      {/* FOCUSED DEMAND — Now uses universal SignalDetail via detailId */}
       {focused &&
         (() => {
           const intent = INTENT_MARKET.find((i) => i.id === focused) || null;
           if (!intent) return null;
-          const d = intent.volTrend;
-          const max = Math.max(...d);
-          const min = Math.min(...d);
-          const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-          const chartH = mob ? 140 : 180;
-          const chartW = mob ? 280 : 520;
-          const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
-
-          // Supply data — derive agent count + competition from intent data
-          const supplyTrend = d.map((v, i) => Math.round((intent.competition / 100) * v * (0.6 + i * 0.06)));
-          const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
-          const chartMax = Math.max(...allVals);
-          const chartMin = Math.min(...allVals);
-          const range = chartMax - chartMin || 1;
-          const pad = { top: 16, bottom: 40, left: 40, right: 20 };
-          const plotW = chartW - pad.left - pad.right;
-          const plotH = chartH - pad.top - pad.bottom;
-
-          const demandPts = d.map((v, i) => ({
-            x: pad.left + (i / (d.length - 1)) * plotW,
-            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-          }));
-          const supplyPts = supplyTrend.map((v, i) => ({
-            x: pad.left + (i / (d.length - 1)) * plotW,
-            y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-          }));
-
-          const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-          const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-          const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
-          const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
-
-          // Matching signal for agent count
-          const matchSignal = LIVE_SIGNALS?.find((s) =>
-            s.query?.toLowerCase().includes(intent.query.split(" ")[0].toLowerCase()),
-          );
-          const agentCount = matchSignal?.agents || Math.max(1, Math.round(intent.competition / 20));
           const catColor = INTENT_CATEGORIES.find((c) => c.name === intent.category)?.color || "#78909C";
-
-          // Related SMB requests
-          const related = MOCK_INTENTS.filter((i) => i.vertical === intent.vertical);
-
+          const relatedSignals = [
+            ...MOCK_INTENTS.filter((i) => i.vertical === intent.vertical).map((r) => {
+              const mm = INTENT_MARKET?.find(
+                (m) =>
+                  m.query?.toLowerCase().includes(r.queries.split(" ")[0].toLowerCase()) ||
+                  r.queries.toLowerCase().includes(m.query?.split(" ")[0].toLowerCase()),
+              );
+              return {
+                id: r.id,
+                query: r.queries,
+                vertical: r.vertical,
+                budget: r.budget,
+                opportunity: mm?.opportunity || Math.min(99, (r.bids || 1) * 18 + 20),
+                category: r.business,
+              };
+            }),
+            ...INTENT_MARKET.filter((m) => m.vertical === intent.vertical && m.id !== intent.id)
+              .slice(0, 3)
+              .map((m) => ({
+                id: `mkt-${m.id}`,
+                query: m.query,
+                vertical: m.vertical,
+                opportunity: m.opportunity,
+                category: m.category,
+              })),
+          ].slice(0, 5);
           return (
             <div style={{ marginBottom: mob ? 10 : 20 }}>
-              {/* Header */}
-              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    marginBottom: 10,
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
-                      <VBadge v={intent.vertical} />
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: 2, background: catColor }} />
-                        <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)" }}>
-                          {intent.category}
-                        </span>
-                      </div>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: "#66BB6A",
-                          background: "rgba(102,187,106,.06)",
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                        }}
-                      >
-                        +{growth}%
-                      </span>
-                    </div>
-                    <div style={{ fontSize: mob ? 14 : 16, fontWeight: 700, lineHeight: 1.3 }}>{intent.query}</div>
-                  </div>
-                  <button
-                    onClick={() => setFocused(null)}
-                    style={{
-                      fontFamily: ft.mono,
-                      fontSize: 14,
-                      color: "rgba(255,255,255,.2)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "2px 6px",
-                      flexShrink: 0,
-                      marginLeft: 8,
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-                {/* Mini KPIs */}
-                <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 6 }}>
-                  {[
-                    { l: "Volume", v: `${(intent.vol / 1000).toFixed(0)}K`, c: "#E3F2FD" },
-                    {
-                      l: `Growth (${durationIdx})`,
-                      v: `${getGrowth(intent) >= 0 ? "+" : ""}${getGrowth(intent)}%`,
-                      c: getGrowth(intent) >= 0 ? "#66BB6A" : "#EF5350",
-                    },
-                    {
-                      l: "Competition",
-                      v: `${intent.competition}`,
-                      c: intent.competition >= 85 ? "#EF5350" : intent.competition >= 65 ? "#FFA726" : "#66BB6A",
-                    },
-                    { l: "Opp Score", v: intent.opportunity, c: intent.opportunity >= 80 ? "#66BB6A" : "#FFA726" },
-                  ].map((s, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        textAlign: "center",
-                        padding: "8px 4px",
-                        background: "rgba(255,255,255,.015)",
-                        borderRadius: 6,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 7,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                          letterSpacing: ".06em",
-                          marginBottom: 3,
-                        }}
-                      >
-                        {s.l}
-                      </div>
-                      <div style={{ fontFamily: ft.display, fontSize: mob ? 16 : 18, fontWeight: 700, color: s.c }}>
-                        {s.v}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Supply & Demand Popularity Chart */}
-              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12, overflow: "hidden" }}>
-                <div
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}
-                >
-                  <div>
-                    <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, marginBottom: 2 }}>
-                      Supply vs Demand Index
-                    </h3>
-                    <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.18)" }}>
-                      6-month volume trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
-                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
-                      <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
-                  <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
-                    <defs>
-                      <linearGradient id={`demFill${intent.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={blue} stopOpacity=".15" />
-                        <stop offset="100%" stopColor={blue} stopOpacity="0" />
-                      </linearGradient>
-                      <linearGradient id={`supFill${intent.id}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
-                        <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    {/* Grid lines */}
-                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
-                      const yy = pad.top + plotH * (1 - pct);
-                      const val = chartMin + range * pct;
-                      return (
-                        <g key={i}>
-                          <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
-                          <text
-                            x={pad.left - 4}
-                            y={yy + 3}
-                            textAnchor="end"
-                            fill="rgba(255,255,255,.12)"
-                            style={{ fontFamily: ft.mono, fontSize: 7 }}
-                          >
-                            {(val / 1000).toFixed(0)}K
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {/* Supply area + line */}
-                    <path d={supplyArea} fill={`url(#supFill${intent.id})`} />
-                    <path
-                      d={supplyLine}
-                      fill="none"
-                      stroke="#FFA726"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray="6 3"
-                    />
-                    {/* Demand area + line */}
-                    <path d={demandArea} fill={`url(#demFill${intent.id})`} />
-                    <path
-                      d={demandLine}
-                      fill="none"
-                      stroke={blue}
-                      strokeWidth={2.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    {/* Demand dots */}
-                    {demandPts.map((p, i) => (
-                      <circle key={`d${i}`} cx={p.x} cy={p.y} r={3.5} fill="#0A0F1A" stroke={blue} strokeWidth={2} />
-                    ))}
-                    {/* Supply dots */}
-                    {supplyPts.map((p, i) => (
-                      <circle
-                        key={`s${i}`}
-                        cx={p.x}
-                        cy={p.y}
-                        r={2.5}
-                        fill="#0A0F1A"
-                        stroke="#FFA726"
-                        strokeWidth={1.5}
-                      />
-                    ))}
-                    {/* Gap highlight at last point */}
-                    {(() => {
-                      const dLast = demandPts[demandPts.length - 1];
-                      const sLast = supplyPts[supplyPts.length - 1];
-                      const gap = Math.abs(dLast.y - sLast.y);
-                      if (gap < 8) return null;
-                      const midY = (dLast.y + sLast.y) / 2;
-                      return (
-                        <>
-                          <line
-                            x1={dLast.x + 8}
-                            y1={dLast.y}
-                            x2={dLast.x + 8}
-                            y2={sLast.y}
-                            stroke="rgba(102,187,106,.3)"
-                            strokeWidth={1}
-                            strokeDasharray="2 2"
-                          />
-                          <text
-                            x={dLast.x + 14}
-                            y={midY + 3}
-                            fill="#66BB6A"
-                            style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
-                          >
-                            GAP
-                          </text>
-                        </>
-                      );
-                    })()}
-                    {/* X-axis labels */}
-                    {months.slice(0, d.length).map((m, i) => (
-                      <text
-                        key={`m${i}`}
-                        x={demandPts[i].x}
-                        y={chartH - 4}
-                        textAnchor="middle"
-                        fill="rgba(255,255,255,.15)"
-                        style={{ fontFamily: ft.mono, fontSize: 8 }}
-                      >
-                        {m}
-                      </text>
-                    ))}
-                  </svg>
-                </div>
-                {/* Gap summary */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: mob ? 8 : 16,
-                    marginTop: 12,
-                    padding: "10px 12px",
-                    background: "rgba(102,187,106,.03)",
-                    borderRadius: 8,
-                    border: "1px solid rgba(102,187,106,.06)",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 80 }}>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 8,
-                        color: "rgba(255,255,255,.2)",
-                        textTransform: "uppercase",
-                        letterSpacing: ".06em",
-                      }}
-                    >
-                      Demand Volume
-                    </div>
-                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: blue }}>
-                      {(intent.vol / 1000).toFixed(0)}K
-                      <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}>/mo</span>
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 80 }}>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 8,
-                        color: "rgba(255,255,255,.2)",
-                        textTransform: "uppercase",
-                        letterSpacing: ".06em",
-                      }}
-                    >
-                      Supply Capacity
-                    </div>
-                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
-                      {agentCount} agent{agentCount !== 1 ? "s" : ""}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 80 }}>
-                    <div
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 8,
-                        color: "rgba(255,255,255,.2)",
-                        textTransform: "uppercase",
-                        letterSpacing: ".06em",
-                      }}
-                    >
-                      Market Gap
-                    </div>
-                    <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                      {intent.competition < 75 ? "High" : intent.competition < 90 ? "Medium" : "Narrow"}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Budget & Activation */}
-              <Card mob={mob} style={{ marginBottom: mob ? 8 : 12 }}>
-                <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-                  Budget & Activation
-                </h3>
-                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.18)", marginBottom: 14 }}>
-                  Estimated weekly budget to capture this demand signal
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10 }}>
-                  {[
-                    {
-                      l: "Est. Weekly Budget",
-                      v: `$${Math.round((intent.vol / 1000) * 3.5).toLocaleString()}`,
-                      sub: "based on volume + competition",
-                      c: "#E3F2FD",
-                    },
-                    {
-                      l: "Cost per 1K Impressions",
-                      v: `$${intent.vol > 0 ? (((intent.vol / 1000) * 3.5 * 4.33) / (intent.vol / 1000)).toFixed(2) : "—"}`,
-                      sub: "monthly estimate",
-                      c: blue,
-                    },
-                    {
-                      l: "AIO Citation Potential",
-                      v: `${intent.aioCited} sources`,
-                      sub: `avg position #${intent.avgPos}`,
-                      c: "#66BB6A",
-                    },
-                    {
-                      l: "Agent Availability",
-                      v: `${agentCount} competing`,
-                      sub: `${intent.vertical} specialist${agentCount !== 1 ? "s" : ""}`,
-                      c: "#FFA726",
-                    },
-                  ].map((b, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        padding: "12px 14px",
-                        background: "rgba(255,255,255,.015)",
-                        borderRadius: 8,
-                        border: "1px solid rgba(255,255,255,.03)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 8,
-                          color: "rgba(255,255,255,.18)",
-                          textTransform: "uppercase",
-                          letterSpacing: ".06em",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {b.l}
-                      </div>
-                      <div style={{ fontFamily: ft.display, fontSize: 20, fontWeight: 700, color: b.c }}>{b.v}</div>
-                      <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)", marginTop: 2 }}>
-                        {b.sub}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => {
-                    setDetailId(intent.id);
+              <SignalDetail
+                signal={{ ...intent, catColor }}
+                agents={ALL_AGENTS}
+                relatedSignals={relatedSignals}
+                mob={mob}
+                tab={tab}
+                onClose={() => setFocused(null)}
+                onActivate={(r) => {
+                  const mkt = INTENT_MARKET.find((m) => m.query === r.query);
+                  if (mkt) {
+                    setDetailId(mkt.id);
                     setFocused(null);
-                  }}
-                  style={{
-                    width: "100%",
-                    marginTop: 14,
-                    fontFamily: ft.display,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                    border: "none",
-                    padding: "12px 0",
-                    borderRadius: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  Activate This Intent →
-                </button>
-              </Card>
-
-              {/* Related SMB Requests */}
-              {related.length > 0 && (
-                <Card mob={mob}>
-                  <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>
-                    Related SMB Requests
-                  </h3>
-                  <div style={{ display: "grid", gap: 6, overflow: "hidden" }}>
-                    {related.map((r) => {
-                      const mm = INTENT_MARKET?.find(
-                        (m) =>
-                          m.query?.toLowerCase().includes(r.queries.split(" ")[0].toLowerCase()) ||
-                          r.queries.toLowerCase().includes(m.query?.split(" ")[0].toLowerCase()),
-                      );
-                      const opp = mm?.opportunity || Math.min(99, (r.bids || 1) * 18 + 20);
-                      return (
-                        <div
-                          key={r.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "10px 12px",
-                            background: "rgba(255,255,255,.015)",
-                            borderRadius: 8,
-                            border: "1px solid rgba(255,255,255,.03)",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 30,
-                              height: 30,
-                              borderRadius: 7,
-                              background:
-                                opp >= 80
-                                  ? "rgba(102,187,106,.08)"
-                                  : opp >= 60
-                                    ? "rgba(255,167,38,.08)"
-                                    : "rgba(66,165,245,.06)",
-                              border: `1px solid ${opp >= 80 ? "rgba(102,187,106,.15)" : opp >= 60 ? "rgba(255,167,38,.15)" : "rgba(66,165,245,.08)"}`,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontFamily: ft.mono,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: opp >= 80 ? "#66BB6A" : opp >= 60 ? "#FFA726" : blue,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {opp}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {r.queries}
-                            </div>
-                            <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
-                              {r.budget}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              )}
+                  }
+                }}
+              />
             </div>
           );
         })()}
@@ -5451,13 +5137,14 @@ function PulsingDot({ color, pulse }) {
 }
 
 function Live({ mob, tab }) {
-  const { signals: LIVE_SIGNALS, agents: ALL_AGENTS } = useData();
+  const { signals: LIVE_SIGNALS, agents: ALL_AGENTS, intentMarket: INTENT_MARKET } = useData();
   const [sort, setSort] = useState("signal");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [expanded, setExpanded] = useState(null);
+  const [expanded] = useState(null);
   const [pulse, setPulse] = useState(true);
-  const [budgetMgr, setBudgetMgr] = useState(null); // signal id being managed
-  const [agentBudgets, setAgentBudgets] = useState({}); // { signalId: { agentId: amount } }
+  const [budgetMgr, setBudgetMgr] = useState(null);
+  const [agentBudgets, setAgentBudgets] = useState({});
+  const [detailSig, setDetailSig] = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => setPulse((p) => !p), 1500);
@@ -5687,6 +5374,45 @@ function Live({ mob, tab }) {
     { label: "Avg Agents", value: avgAgents, sub: "per demand signal", color: "#FFA726" },
   ];
 
+  // ─── DETAIL VIEW (Universal SignalDetail) ───
+  const detailSignal = detailSig ? LIVE_SIGNALS.find((s) => s.id === detailSig) : null;
+  if (detailSignal) {
+    // Build related signals from other live signals in same vertical + any matching market data
+    const relatedSignals = [
+      ...LIVE_SIGNALS.filter((s) => s.id !== detailSignal.id && s.vertical === detailSignal.vertical)
+        .slice(0, 3)
+        .map((s) => ({
+          id: s.id,
+          query: s.query,
+          vertical: s.vertical,
+          signal: s.signal,
+          category: s.category,
+          avgSpend: s.avgSpend,
+        })),
+      ...(INTENT_MARKET || [])
+        .filter((m) => m.vertical === detailSignal.vertical)
+        .slice(0, 2)
+        .map((m) => ({
+          id: `mkt-${m.id}`,
+          query: m.query,
+          vertical: m.vertical,
+          opportunity: m.opportunity,
+          category: m.category,
+        })),
+    ].slice(0, 5);
+
+    return (
+      <SignalDetail
+        signal={detailSignal}
+        agents={ALL_AGENTS}
+        relatedSignals={relatedSignals}
+        mob={mob}
+        tab={tab}
+        onClose={() => setDetailSig(null)}
+      />
+    );
+  }
+
   return (
     <div>
       <div
@@ -5895,11 +5621,7 @@ function Live({ mob, tab }) {
           {sorted.map((sig) => (
             <div
               key={sig.id}
-              onClick={() => {
-                const next = expanded === sig.id ? null : sig.id;
-                setExpanded(next);
-                setBudgetMgr(next);
-              }}
+              onClick={() => setDetailSig(sig.id)}
               style={{
                 background: "rgba(255,255,255,.02)",
                 border: `1px solid ${expanded === sig.id ? "rgba(66,165,245,.15)" : "rgba(66,165,245,.06)"}`,
@@ -6054,7 +5776,7 @@ function Live({ mob, tab }) {
                           cursor: "pointer",
                           background: isSelected ? "rgba(66,165,245,.02)" : "transparent",
                         }}
-                        onClick={() => setBudgetMgr(isSelected ? null : sig.id)}
+                        onClick={() => setDetailSig(sig.id)}
                         onMouseEnter={(e) => {
                           if (!isSelected) e.currentTarget.style.background = "rgba(66,165,245,.015)";
                         }}
