@@ -690,6 +690,7 @@ function Intents({ mob, tab }) {
   const [sort, setSort] = useState("opportunity");
   const [expanded] = useState(null);
   const [focused, setFocused] = useState(null);
+  const [durationIdx, setDurationIdx] = useState("6m");
   const [qSearch, setQSearch] = useState("");
   const [qOpen, setQOpen] = useState(false);
   const [detailId, setDetailId] = useState(null);
@@ -723,6 +724,24 @@ function Intents({ mob, tab }) {
     if (e.key === "Escape") setIndustryFocused(false);
   };
 
+  // Duration options for indexing volume/growth
+  const DURATION_OPTS = [
+    { k: "7d", l: "7d", points: 2 },
+    { k: "3m", l: "3m", points: 4 },
+    { k: "6m", l: "6m", points: 7 },
+    { k: "1y", l: "1y", points: 7 },
+    { k: "5y", l: "5y", points: 7 },
+  ];
+
+  const getGrowth = (intent) => {
+    const t = intent.volTrend;
+    if (!t || t.length < 2) return 0;
+    const dur = DURATION_OPTS.find((d) => d.k === durationIdx) || DURATION_OPTS[2];
+    const pts = Math.min(dur.points, t.length);
+    const startIdx = Math.max(0, t.length - pts);
+    return Math.round(((t[t.length - 1] - t[startIdx]) / t[startIdx]) * 100);
+  };
+
   const filtered =
     industryTags.length === 0
       ? INTENT_MARKET
@@ -730,25 +749,20 @@ function Intents({ mob, tab }) {
   const sorted = [...filtered].sort((a, b) => {
     if (sort === "opportunity") return b.opportunity - a.opportunity;
     if (sort === "volume") return b.vol - a.vol;
-    if (sort === "aioRate") return b.aioRate - a.aioRate;
-    if (sort === "ctrDelta") return a.ctrDelta - b.ctrDelta;
+    if (sort === "growth") return getGrowth(b) - getGrowth(a);
     return 0;
   });
 
-  const avgAio = INTENT_MARKET.length
-    ? Math.round(INTENT_MARKET.reduce((s, i) => s + i.aioRate, 0) / INTENT_MARKET.length)
-    : 0;
-  const avgCtrDrop = INTENT_MARKET.length
-    ? Math.round(INTENT_MARKET.reduce((s, i) => s + i.ctrDelta, 0) / INTENT_MARKET.length)
-    : 0;
   const totalVol = INTENT_MARKET.reduce((s, i) => s + i.vol, 0);
+  const avgGrowth = INTENT_MARKET.length
+    ? Math.round(INTENT_MARKET.reduce((s, i) => s + getGrowth(i), 0) / INTENT_MARKET.length)
+    : 0;
   const highOpp = INTENT_MARKET.filter((i) => i.opportunity >= 80).length;
 
   const kpis = [
     { label: "SMB Demand Signals", value: INTENT_MARKET.length, color: blue },
     { label: "Total Search Vol", value: `${(totalVol / 1000000).toFixed(1)}M`, color: "#64B5F6" },
-    { label: "Avg AIO Rate", value: `${avgAio}%`, color: "#66BB6A" },
-    { label: "Avg CTR Impact", value: `${avgCtrDrop}%`, color: "#EF5350" },
+    { label: `Avg Growth (${durationIdx})`, value: `${avgGrowth >= 0 ? "+" : ""}${avgGrowth}%`, color: "#66BB6A" },
     { label: "High Opportunity", value: highOpp, color: "#FFA726" },
     { label: "Verticals", value: INTENT_CATEGORIES.length, color: "#AB47BC" },
   ];
@@ -777,36 +791,10 @@ function Intents({ mob, tab }) {
 
   if (detailIntent) {
     const d = detailIntent.volTrend;
-    const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
-    const chartH = mob ? 180 : 260;
-    const chartW = mob ? 300 : 680;
     const growth = d.length >= 2 ? Math.round(((d[d.length - 1] - d[0]) / d[0]) * 100) : 0;
     const catColor = INTENT_CATEGORIES.find((c) => c.name === detailIntent.category)?.color || "#78909C";
     const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
     const monthlyEst = Math.round(budgetNum * 4.33);
-
-    // Supply trend derived from competition × volume
-    const supplyTrend = d.map((v, i) => Math.round((detailIntent.competition / 100) * v * (0.6 + i * 0.06)));
-    const allVals = [...d, ...supplyTrend].map((v) => v * 1000);
-    const chartMax = Math.max(...allVals);
-    const chartMin = Math.min(...allVals);
-    const range = chartMax - chartMin || 1;
-    const pad = { top: 16, bottom: 44, left: 44, right: 20 };
-    const plotW = chartW - pad.left - pad.right;
-    const plotH = chartH - pad.top - pad.bottom;
-
-    const demandPts = d.map((v, i) => ({
-      x: pad.left + (i / (d.length - 1)) * plotW,
-      y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-    }));
-    const supplyPts = supplyTrend.map((v, i) => ({
-      x: pad.left + (i / (d.length - 1)) * plotW,
-      y: pad.top + plotH - ((v * 1000 - chartMin) / range) * plotH,
-    }));
-    const demandLine = demandPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-    const supplyLine = supplyPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-    const demandArea = `${demandLine} L${demandPts[demandPts.length - 1].x},${pad.top + plotH} L${demandPts[0].x},${pad.top + plotH} Z`;
-    const supplyArea = `${supplyLine} L${supplyPts[supplyPts.length - 1].x},${pad.top + plotH} L${supplyPts[0].x},${pad.top + plotH} Z`;
 
     // Matching signal for agent count
     const matchSignal = LIVE_SIGNALS?.find((s) =>
@@ -890,169 +878,68 @@ function Intents({ mob, tab }) {
           </div>
         </div>
 
-        {/* Indexable Popularity — Demand vs Supply */}
-        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24, overflow: "hidden" }}>
+        {/* Volume & Growth — Duration Index */}
+        <Card mob={mob} style={{ marginBottom: mob ? 14 : 24 }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: mob ? 12 : 20,
+              marginBottom: 16,
             }}
           >
             <div>
               <h3 style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>
-                Indexable Popularity
+                Volume & Growth
               </h3>
               <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.2)" }}>
-                6-month demand vs supply trend · {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
+                {agentCount} active agent{agentCount !== 1 ? "s" : ""} competing
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: mob ? 10 : 16 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 10, height: 3, borderRadius: 2, background: blue }} />
-                <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>DEMAND</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 10, height: 3, borderRadius: 2, background: "#FFA726" }} />
-                <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>SUPPLY</span>
-              </div>
-              <div
+            <div
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 12,
+                fontWeight: 700,
+                color: growth >= 0 ? "#66BB6A" : "#EF5350",
+                background: growth >= 0 ? "rgba(102,187,106,.06)" : "rgba(239,83,80,.06)",
+                padding: "4px 12px",
+                borderRadius: 6,
+              }}
+            >
+              {growth >= 0 ? "+" : ""}
+              {growth}%
+            </div>
+          </div>
+          {/* Duration selector */}
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+            {DURATION_OPTS.map((dur) => (
+              <button
+                key={dur.k}
+                onClick={() => setDurationIdx(dur.k)}
                 style={{
+                  flex: 1,
                   fontFamily: ft.mono,
                   fontSize: 12,
                   fontWeight: 700,
-                  color: "#66BB6A",
-                  background: "rgba(102,187,106,.06)",
-                  padding: "4px 12px",
-                  borderRadius: 6,
+                  background: durationIdx === dur.k ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
+                  color: durationIdx === dur.k ? blue : "rgba(255,255,255,.3)",
+                  border: `1px solid ${durationIdx === dur.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
+                  padding: "10px 0",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  transition: "all .2s",
                 }}
               >
-                +{growth}%
-              </div>
-            </div>
+                {dur.l}
+              </button>
+            ))}
           </div>
-          <div style={{ display: "flex", justifyContent: "center", overflow: "hidden" }}>
-            <svg width={chartW} height={chartH} style={{ overflow: "visible" }}>
-              <defs>
-                <linearGradient id={`demFillD${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={blue} stopOpacity=".15" />
-                  <stop offset="100%" stopColor={blue} stopOpacity="0" />
-                </linearGradient>
-                <linearGradient id={`supFillD${detailIntent.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#FFA726" stopOpacity=".1" />
-                  <stop offset="100%" stopColor="#FFA726" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {/* Grid lines */}
-              {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => {
-                const yy = pad.top + plotH * (1 - pct);
-                const val = chartMin + range * pct;
-                return (
-                  <g key={i}>
-                    <line x1={pad.left} y1={yy} x2={chartW - pad.right} y2={yy} stroke="rgba(255,255,255,.03)" />
-                    <text
-                      x={pad.left - 4}
-                      y={yy + 3}
-                      textAnchor="end"
-                      fill="rgba(255,255,255,.15)"
-                      style={{ fontFamily: ft.mono, fontSize: 8 }}
-                    >
-                      {(val / 1000).toFixed(0)}K
-                    </text>
-                  </g>
-                );
-              })}
-              {/* Supply area + line */}
-              <path d={supplyArea} fill={`url(#supFillD${detailIntent.id})`} />
-              <path
-                d={supplyLine}
-                fill="none"
-                stroke="#FFA726"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeDasharray="6 3"
-              />
-              {/* Demand area + line */}
-              <path d={demandArea} fill={`url(#demFillD${detailIntent.id})`} />
-              <path
-                d={demandLine}
-                fill="none"
-                stroke={blue}
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              {/* Demand dots + values */}
-              {demandPts.map((p, i) => (
-                <g key={`d${i}`}>
-                  <circle cx={p.x} cy={p.y} r={4.5} fill="#0A0F1A" stroke={blue} strokeWidth={2.5} />
-                  <text
-                    x={p.x}
-                    y={p.y - 12}
-                    textAnchor="middle"
-                    fill="rgba(255,255,255,.5)"
-                    style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 600 }}
-                  >
-                    {(d[i] / 1000).toFixed(0)}K
-                  </text>
-                </g>
-              ))}
-              {/* Supply dots */}
-              {supplyPts.map((p, i) => (
-                <circle key={`s${i}`} cx={p.x} cy={p.y} r={2.5} fill="#0A0F1A" stroke="#FFA726" strokeWidth={1.5} />
-              ))}
-              {/* Gap highlight at last point */}
-              {(() => {
-                const dLast = demandPts[demandPts.length - 1];
-                const sLast = supplyPts[supplyPts.length - 1];
-                const gap = Math.abs(dLast.y - sLast.y);
-                if (gap < 8) return null;
-                const midY = (dLast.y + sLast.y) / 2;
-                return (
-                  <>
-                    <line
-                      x1={dLast.x + 8}
-                      y1={dLast.y}
-                      x2={dLast.x + 8}
-                      y2={sLast.y}
-                      stroke="rgba(102,187,106,.3)"
-                      strokeWidth={1}
-                      strokeDasharray="2 2"
-                    />
-                    <text
-                      x={dLast.x + 14}
-                      y={midY + 3}
-                      fill="#66BB6A"
-                      style={{ fontFamily: ft.mono, fontSize: 8, fontWeight: 700 }}
-                    >
-                      GAP
-                    </text>
-                  </>
-                );
-              })()}
-              {/* X-axis labels */}
-              {months.slice(0, d.length).map((m, i) => (
-                <text
-                  key={`m${i}`}
-                  x={demandPts[i].x}
-                  y={chartH - 4}
-                  textAnchor="middle"
-                  fill="rgba(255,255,255,.2)"
-                  style={{ fontFamily: ft.mono, fontSize: 9 }}
-                >
-                  {m}
-                </text>
-              ))}
-            </svg>
-          </div>
-          {/* Gap summary strip */}
+          {/* Summary strip */}
           <div
             style={{
               display: "flex",
               gap: mob ? 8 : 16,
-              marginTop: 14,
               padding: "10px 14px",
               background: "rgba(102,187,106,.03)",
               borderRadius: 8,
@@ -1087,6 +974,30 @@ function Intents({ mob, tab }) {
                   letterSpacing: ".06em",
                 }}
               >
+                Growth ({durationIdx})
+              </div>
+              <div
+                style={{
+                  fontFamily: ft.display,
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: growth >= 0 ? "#66BB6A" : "#EF5350",
+                }}
+              >
+                {growth >= 0 ? "+" : ""}
+                {growth}%
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 80 }}>
+              <div
+                style={{
+                  fontFamily: ft.mono,
+                  fontSize: 8,
+                  color: "rgba(255,255,255,.2)",
+                  textTransform: "uppercase",
+                  letterSpacing: ".06em",
+                }}
+              >
                 Supply Capacity
               </div>
               <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#FFA726" }}>
@@ -1107,23 +1018,6 @@ function Intents({ mob, tab }) {
               </div>
               <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
                 {detailIntent.competition < 75 ? "High" : detailIntent.competition < 90 ? "Medium" : "Narrow"}
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 80 }}>
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.2)",
-                  textTransform: "uppercase",
-                  letterSpacing: ".06em",
-                }}
-              >
-                AIO Coverage
-              </div>
-              <div style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, color: "#66BB6A" }}>
-                {detailIntent.aioRate}%
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,.2)" }}> · {detailIntent.aioCited} cited</span>
               </div>
             </div>
           </div>
@@ -2328,8 +2222,7 @@ function Intents({ mob, tab }) {
           {[
             { k: "opportunity", l: "Opportunity" },
             { k: "volume", l: "Volume" },
-            { k: "aioRate", l: "AIO Rate" },
-            { k: "ctrDelta", l: "CTR Impact" },
+            { k: "growth", l: "Growth" },
           ].map((s) => (
             <button
               key={s.k}
@@ -2434,7 +2327,7 @@ function Intents({ mob, tab }) {
                   </div>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 12, marginTop: 8, alignItems: "center" }}>
                 <div>
                   <div
                     style={{
@@ -2459,29 +2352,43 @@ function Intents({ mob, tab }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    AIO Rate
+                    Growth ({durationIdx})
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 12, fontWeight: 600, color: "#66BB6A" }}>
-                    {intent.aioRate}%
-                  </div>
-                </div>
-                <div>
                   <div
                     style={{
                       fontFamily: ft.mono,
-                      fontSize: 8,
-                      color: "rgba(255,255,255,.18)",
-                      textTransform: "uppercase",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: getGrowth(intent) >= 0 ? "#66BB6A" : "#EF5350",
                     }}
                   >
-                    CTR
-                  </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 12, fontWeight: 600, color: "#EF5350" }}>
-                    {intent.ctrDelta}%
+                    {getGrowth(intent) >= 0 ? "+" : ""}
+                    {getGrowth(intent)}%
                   </div>
                 </div>
-                <div style={{ marginLeft: "auto" }}>
-                  <Sparkline data={intent.volTrend} width={48} height={20} color={blue} />
+                <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                  {DURATION_OPTS.map((d) => (
+                    <button
+                      key={d.k}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDurationIdx(d.k);
+                      }}
+                      style={{
+                        fontFamily: ft.mono,
+                        fontSize: 8,
+                        fontWeight: 600,
+                        background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.02)",
+                        color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
+                        border: `1px solid ${durationIdx === d.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
+                        padding: "3px 7px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {d.l}
+                    </button>
+                  ))}
                 </div>
               </div>
               {expanded === intent.id && (
@@ -2560,7 +2467,7 @@ function Intents({ mob, tab }) {
       ) : (
         <Card mob={mob} style={{ padding: 0, overflow: "hidden" }}>
           <ScrollX>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(66,165,245,.06)" }}>
                   {[
@@ -2568,16 +2475,15 @@ function Intents({ mob, tab }) {
                     "SMB Demand Signal",
                     "Category",
                     "Volume",
-                    "Trend",
-                    "AIO Rate",
-                    "CTR Impact",
+                    `Growth (${durationIdx})`,
                     "Competition",
                     "Cited",
                     "Avg Pos",
                     "Opportunity",
-                  ].map((h) => (
+                    "",
+                  ].map((h, hi) => (
                     <th
-                      key={h}
+                      key={`${h}-${hi}`}
                       style={{
                         fontFamily: ft.mono,
                         fontSize: 9,
@@ -2590,7 +2496,34 @@ function Intents({ mob, tab }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {h}
+                      {hi === 9 ? (
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {DURATION_OPTS.map((d) => (
+                            <button
+                              key={d.k}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDurationIdx(d.k);
+                              }}
+                              style={{
+                                fontFamily: ft.mono,
+                                fontSize: 8,
+                                fontWeight: 600,
+                                background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.02)",
+                                color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
+                                border: `1px solid ${durationIdx === d.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
+                                padding: "3px 7px",
+                                borderRadius: 4,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {d.l}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        h
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -2670,22 +2603,17 @@ function Intents({ mob, tab }) {
                       {(intent.vol / 1000).toFixed(0)}K
                       <span style={{ fontSize: 9, color: "rgba(255,255,255,.18)" }}>/mo</span>
                     </td>
-                    <td style={{ padding: "12px 10px" }}>
-                      <Sparkline data={intent.volTrend} width={56} height={22} color={blue} />
-                    </td>
-                    <td style={{ padding: "12px 10px" }}>
-                      <HeatBar value={intent.aioRate} color="#66BB6A" />
-                    </td>
                     <td
                       style={{
                         fontFamily: ft.mono,
                         fontSize: 12,
                         fontWeight: 600,
-                        color: intent.ctrDelta <= -30 ? "#EF5350" : intent.ctrDelta <= -15 ? "#FFA726" : "#66BB6A",
+                        color: getGrowth(intent) >= 0 ? "#66BB6A" : "#EF5350",
                         padding: "12px 10px",
                       }}
                     >
-                      {intent.ctrDelta}%
+                      {getGrowth(intent) >= 0 ? "+" : ""}
+                      {getGrowth(intent)}%
                     </td>
                     <td style={{ padding: "12px 10px" }}>
                       <HeatBar
@@ -2746,6 +2674,7 @@ function Intents({ mob, tab }) {
                         </div>
                       </div>
                     </td>
+                    <td style={{ padding: "12px 10px" }} />
                   </tr>
                 ))}
               </tbody>
@@ -2856,11 +2785,14 @@ function Intents({ mob, tab }) {
                   </button>
                 </div>
                 {/* Mini KPIs */}
-                <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(3,1fr)" : "repeat(5,1fr)", gap: 6 }}>
+                <div style={{ display: "grid", gridTemplateColumns: mob ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 6 }}>
                   {[
                     { l: "Volume", v: `${(intent.vol / 1000).toFixed(0)}K`, c: "#E3F2FD" },
-                    { l: "AIO Rate", v: `${intent.aioRate}%`, c: "#66BB6A" },
-                    { l: "CTR Impact", v: `${intent.ctrDelta}%`, c: "#EF5350" },
+                    {
+                      l: `Growth (${durationIdx})`,
+                      v: `${getGrowth(intent) >= 0 ? "+" : ""}${getGrowth(intent)}%`,
+                      c: getGrowth(intent) >= 0 ? "#66BB6A" : "#EF5350",
+                    },
                     {
                       l: "Competition",
                       v: `${intent.competition}`,
