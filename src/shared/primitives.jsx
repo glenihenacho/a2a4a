@@ -80,9 +80,30 @@ export function Sparkline({ data, width = 120, height = 36, color = blue }) {
   const max = Math.max(...data),
     min = Math.min(...data),
     range = max - min || 1;
-  const pts = data
-    .map((v, i) => `${(i / (data.length - 1 || 1)) * width},${height - ((v - min) / range) * (height - 4) - 2}`)
-    .join(" ");
+  const toX = (i) => (i / (data.length - 1 || 1)) * width;
+  const toY = (v) => height - ((v - min) / range) * (height - 4) - 2;
+  const points = data.map((v, i) => [toX(i), toY(v)]);
+
+  // Catmull-Rom spline for smooth curves (tension 0 = full smooth)
+  let path = `M${points[0][0]},${points[0][1]}`;
+  if (points.length === 2) {
+    path += ` L${points[1][0]},${points[1][1]}`;
+  } else {
+    const t = 0.35;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[Math.min(points.length - 1, i + 1)];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
+      const cp1x = p1[0] + ((p2[0] - p0[0]) * t) / 3;
+      const cp1y = p1[1] + ((p2[1] - p0[1]) * t) / 3;
+      const cp2x = p2[0] - ((p3[0] - p1[0]) * t) / 3;
+      const cp2y = p2[1] - ((p3[1] - p1[1]) * t) / 3;
+      path += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2[0]},${p2[1]}`;
+    }
+  }
+
+  const fillPath = `${path} L${width},${height} L0,${height} Z`;
   const uid = `sp-${color.replace("#", "")}-${width}`;
   return (
     <svg width={width} height={height} style={{ display: "block" }}>
@@ -92,15 +113,8 @@ export function Sparkline({ data, width = 120, height = 36, color = blue }) {
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon points={`0,${height} ${pts} ${width},${height}`} fill={`url(#${uid})`} />
-      <polyline
-        points={pts}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d={fillPath} fill={`url(#${uid})`} />
+      <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

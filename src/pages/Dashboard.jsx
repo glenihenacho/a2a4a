@@ -2740,6 +2740,34 @@ function Intents({ mob, tab }) {
               {s.l}
             </button>
           ))}
+          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
+          <select
+            value={durationIdx}
+            onChange={(e) => setDurationIdx(e.target.value)}
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 9,
+              fontWeight: 600,
+              background: "rgba(255,255,255,.015)",
+              color: blue,
+              border: "1px solid rgba(66,165,245,.15)",
+              padding: "4px 8px",
+              borderRadius: 5,
+              cursor: "pointer",
+              appearance: "none",
+              WebkitAppearance: "none",
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2342A5F5' opacity='.6'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 6px center",
+              paddingRight: 20,
+            }}
+          >
+            {DURATION_OPTS.map((d) => (
+              <option key={d.k} value={d.k} style={{ background: "#0a0e18", color: "#E3F2FD" }}>
+                {d.l}
+              </option>
+            ))}
+          </select>
         </div>
         {industryTags.length > 0 && (
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -2861,30 +2889,6 @@ function Intents({ mob, tab }) {
                     {getGrowth(intent)}%
                   </div>
                 </div>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-                  {DURATION_OPTS.map((d) => (
-                    <button
-                      key={d.k}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDurationIdx(d.k);
-                      }}
-                      style={{
-                        fontFamily: ft.mono,
-                        fontSize: 8,
-                        fontWeight: 600,
-                        background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.02)",
-                        color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
-                        border: `1px solid ${durationIdx === d.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
-                        padding: "3px 7px",
-                        borderRadius: 4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {d.l}
-                    </button>
-                  ))}
-                </div>
               </div>
               {expanded === intent.id && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.04)" }}>
@@ -2975,7 +2979,7 @@ function Intents({ mob, tab }) {
                     "Cited",
                     "Avg Pos",
                     "Opportunity",
-                    "",
+                    "Trend",
                   ].map((h, hi) => (
                     <th
                       key={`${h}-${hi}`}
@@ -2991,34 +2995,7 @@ function Intents({ mob, tab }) {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {hi === 9 ? (
-                        <div style={{ display: "flex", gap: 3 }}>
-                          {DURATION_OPTS.map((d) => (
-                            <button
-                              key={d.k}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDurationIdx(d.k);
-                              }}
-                              style={{
-                                fontFamily: ft.mono,
-                                fontSize: 8,
-                                fontWeight: 600,
-                                background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "rgba(255,255,255,.02)",
-                                color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
-                                border: `1px solid ${durationIdx === d.k ? "rgba(66,165,245,.2)" : "rgba(255,255,255,.04)"}`,
-                                padding: "3px 7px",
-                                borderRadius: 4,
-                                cursor: "pointer",
-                              }}
-                            >
-                              {d.l}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        h
-                      )}
+                      {h}
                     </th>
                   ))}
                 </tr>
@@ -5871,28 +5848,35 @@ function Live({ mob, tab }) {
               {s.l}
             </button>
           ))}
-        </div>
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          {["7d", "3m", "1y", "5y"].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDuration(d)}
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 9,
-                fontWeight: 600,
-                background: duration === d ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.015)",
-                color: duration === d ? blue : "rgba(255,255,255,.25)",
-                border: `1px solid ${duration === d ? "rgba(66,165,245,.12)" : "rgba(255,255,255,.04)"}`,
-                padding: "4px 8px",
-                borderRadius: 5,
-                cursor: "pointer",
-                textTransform: "uppercase",
-              }}
-            >
-              {d}
-            </button>
-          ))}
+          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
+          <select
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 9,
+              fontWeight: 600,
+              background: "rgba(255,255,255,.015)",
+              color: blue,
+              border: "1px solid rgba(66,165,245,.12)",
+              padding: "4px 8px",
+              borderRadius: 5,
+              cursor: "pointer",
+              appearance: "none",
+              WebkitAppearance: "none",
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2342A5F5' opacity='.6'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 6px center",
+              paddingRight: 20,
+              textTransform: "uppercase",
+            }}
+          >
+            {["7d", "3m", "1y", "5y"].map((d) => (
+              <option key={d} value={d} style={{ background: "#0a0e18", color: "#E3F2FD" }}>
+                {d.toUpperCase()}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
