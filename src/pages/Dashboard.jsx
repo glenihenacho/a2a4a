@@ -54,6 +54,109 @@ function useData() {
   return ctx;
 }
 
+// ─── DURATION DROPDOWN ───
+function DurationDropdown({ value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = options.find((o) => o.k === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative", marginLeft: "auto" }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          fontFamily: ft.mono,
+          fontSize: 9,
+          fontWeight: 600,
+          background: "rgba(255,255,255,.015)",
+          color: blue,
+          border: "1px solid rgba(66,165,245,.15)",
+          padding: "4px 22px 4px 8px",
+          borderRadius: 5,
+          cursor: "pointer",
+          letterSpacing: ".05em",
+          textTransform: "uppercase",
+          position: "relative",
+        }}
+      >
+        {selected.l}
+        <span
+          style={{
+            position: "absolute",
+            right: 7,
+            top: "50%",
+            transform: `translateY(-50%) rotate(${open ? 180 : 0}deg)`,
+            transition: "transform .15s ease",
+            fontSize: 7,
+            lineHeight: 1,
+            color: "rgba(66,165,245,.6)",
+          }}
+        >
+          ▼
+        </span>
+      </button>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            right: 0,
+            zIndex: 50,
+            background: "#0d1220",
+            border: "1px solid rgba(66,165,245,.18)",
+            borderRadius: 6,
+            overflow: "hidden",
+            minWidth: 54,
+            boxShadow: "0 6px 20px rgba(0,0,0,.5)",
+          }}
+        >
+          {options.map((o) => (
+            <button
+              key={o.k}
+              onClick={() => {
+                onChange(o.k);
+                setOpen(false);
+              }}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                fontFamily: ft.mono,
+                fontSize: 9,
+                fontWeight: value === o.k ? 700 : 500,
+                padding: "6px 12px",
+                cursor: "pointer",
+                border: "none",
+                background: value === o.k ? "rgba(66,165,245,.1)" : "transparent",
+                color: value === o.k ? blue : "rgba(255,255,255,.4)",
+                letterSpacing: ".05em",
+                textTransform: "uppercase",
+              }}
+              onMouseEnter={(e) => {
+                if (value !== o.k) e.currentTarget.style.background = "rgba(255,255,255,.04)";
+              }}
+              onMouseLeave={(e) => {
+                if (value !== o.k) e.currentTarget.style.background = "transparent";
+              }}
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── EMPTY STATE COMPONENT ───
 function EmptyState({
   icon = "◎",
@@ -287,29 +390,16 @@ function Dashboard({ mob, tab }) {
         <Card mob={mob}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>Revenue</h3>
-            <div style={{ display: "flex", gap: 3 }}>
-              {["7D", "3M", "1Y", "5Y"].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDuration(d)}
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 8,
-                    fontWeight: 600,
-                    padding: "3px 8px",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    border: "none",
-                    background: duration === d ? "rgba(66,165,245,.1)" : "transparent",
-                    color: duration === d ? blue : "rgba(255,255,255,.25)",
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                  }}
-                >
-                  {d}
-                </button>
-              ))}
-            </div>
+            <DurationDropdown
+              value={duration}
+              onChange={setDuration}
+              options={[
+                { k: "7D", l: "7D" },
+                { k: "3M", l: "3M" },
+                { k: "1Y", l: "1Y" },
+                { k: "5Y", l: "5Y" },
+              ]}
+            />
           </div>
           <BarChart
             data={REVENUE_MONTHS}
@@ -2741,29 +2831,7 @@ function Intents({ mob, tab }) {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
-          {DURATION_OPTS.map((d) => (
-            <button
-              key={d.k}
-              onClick={() => setDurationIdx(d.k)}
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 8,
-                fontWeight: 600,
-                padding: "3px 8px",
-                borderRadius: 4,
-                cursor: "pointer",
-                border: "none",
-                background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "transparent",
-                color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
-                textTransform: "uppercase",
-                letterSpacing: ".05em",
-              }}
-            >
-              {d.l}
-            </button>
-          ))}
-        </div>
+        <DurationDropdown value={durationIdx} onChange={setDurationIdx} options={DURATION_OPTS} />
         {industryTags.length > 0 && (
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
             {industryTags.map((t) => (
@@ -5844,29 +5912,16 @@ function Live({ mob, tab }) {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
-          {["7d", "3m", "1y", "5y"].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDuration(d)}
-              style={{
-                fontFamily: ft.mono,
-                fontSize: 8,
-                fontWeight: 600,
-                padding: "3px 8px",
-                borderRadius: 4,
-                cursor: "pointer",
-                border: "none",
-                background: duration === d ? "rgba(66,165,245,.1)" : "transparent",
-                color: duration === d ? blue : "rgba(255,255,255,.25)",
-                textTransform: "uppercase",
-                letterSpacing: ".05em",
-              }}
-            >
-              {d.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        <DurationDropdown
+          value={duration}
+          onChange={setDuration}
+          options={[
+            { k: "7d", l: "7D" },
+            { k: "3m", l: "3M" },
+            { k: "1y", l: "1Y" },
+            { k: "5y", l: "5Y" },
+          ]}
+        />
       </div>
 
       {/* Signal Feed */}
