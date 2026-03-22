@@ -739,7 +739,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const range = chartMax - chartMin || 1;
   const chartW = mob ? 280 : 520;
   const chartH = mob ? 160 : 200;
-  const pad = { top: 16, bottom: 40, left: 40, right: 20 };
+  const pad = { top: 16, bottom: 8, left: 0, right: 0 };
   const plotW = chartW - pad.left - pad.right;
   const plotH = chartH - pad.top - pad.bottom;
   const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
@@ -867,9 +867,6 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
         <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 26, fontWeight: 700, lineHeight: 1.2 }}>
           {signal.query}
         </h2>
-        <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
-          {signal.id} · {signal.status ? `Status: ${signal.status}` : "Last indexed Feb 24, 2025"}
-        </div>
       </div>
 
       {/* Indexable Popularity Chart */}
@@ -885,7 +882,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
         const cMax = visibleVals.length ? Math.max(...visibleVals) : chartMax;
         const cMin = visibleVals.length ? Math.min(...visibleVals) : chartMin;
         const cRange = cMax - cMin || 1;
-        const cPad = { top: 20, bottom: 28, left: 12, right: 12 };
+        const cPad = { top: 20, bottom: 8, left: 0, right: 0 };
         const cPlotW = chartW - cPad.left - cPad.right;
         const cPlotH = chartH - cPad.top - cPad.bottom;
         const dPts = slicedD.map((v, i) => ({
@@ -930,9 +927,9 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
             >
               <svg
                 ref={chartSvgRef}
-                width={chartW}
-                height={chartH}
-                style={{ display: "block", width: "100%", height: "auto" }}
+                viewBox={`0 0 ${chartW} ${chartH}`}
+                preserveAspectRatio="none"
+                style={{ display: "block", width: "100%", height: mob ? 160 : 200 }}
               >
                 <defs>
                   <linearGradient id={`demGrad${signal.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -1021,19 +1018,6 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                     strokeDasharray="3 3"
                   />
                 )}
-                {/* Month labels */}
-                {slicedMonths.map((m, i) => (
-                  <text
-                    key={`ml${i}`}
-                    x={dPts[i].x}
-                    y={chartH - 4}
-                    textAnchor="middle"
-                    fill={hIdx === i ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.15)"}
-                    style={{ fontFamily: ft.mono, fontSize: 8, transition: "fill .15s" }}
-                  >
-                    {m}
-                  </text>
-                ))}
               </svg>
 
               {/* Hover tooltip */}
