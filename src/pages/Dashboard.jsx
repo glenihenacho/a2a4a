@@ -708,13 +708,37 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const [goingLive, setGoingLive] = useState(false);
   const [budgetSaved, setBudgetSaved] = useState(false);
   const [chartHoverIdx, setChartHoverIdx] = useState(null);
-  const [chartLegend, setChartLegend] = useState("demand"); // "demand" | "supply" | "both"
-  const [chartDuration, setChartDuration] = useState("3M"); // "7D" | "3M" | "1Y" | "5Y"
+  const [chartLegend, setChartLegend] = useState({ demand: true, supply: false });
+  const [legendOpen, setLegendOpen] = useState(false);
+  const legendRef = useRef(null);
+  const [chartDuration, setChartDuration] = useState("3M"); // "7D" | "1M" | "3M" | "1Y" | "5Y"
   const chartSvgRef = useRef(null);
+  const topRef = useRef(null);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    // The content lives inside overflow:auto containers, so window.scrollTo won't work.
+    // Find the nearest scrollable ancestor and reset it, plus scrollIntoView as fallback.
+    if (topRef.current) {
+      let el = topRef.current.parentElement;
+      while (el) {
+        const ov = getComputedStyle(el).overflowY;
+        if (ov === "auto" || ov === "scroll") {
+          el.scrollTop = 0;
+          break;
+        }
+        el = el.parentElement;
+      }
+      topRef.current.scrollIntoView({ block: "start" });
+    }
   }, [signal?.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (legendRef.current && !legendRef.current.contains(e.target)) setLegendOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
   const monthlyEst = Math.round(budgetNum * 4.33);
@@ -750,6 +774,12 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
       for (let i = count - 1; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(d.getDate() - i * Math.floor(7 / (count - 1 || 1)));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+      }
+    } else if (duration === "1M") {
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * Math.floor(30 / (count - 1 || 1)));
         labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
       }
     } else if (duration === "3M") {
@@ -797,7 +827,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   };
 
   return (
-    <div style={{ paddingBottom: 80 }}>
+    <div ref={topRef} style={{ paddingBottom: 80 }}>
       {/* Back / Close */}
       <button
         onClick={onClose}
@@ -903,28 +933,63 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
 
       {/* Indexable Popularity Chart */}
       {(() => {
-        const showDemand = chartLegend === "demand" || chartLegend === "both";
-        const showSupply = chartLegend === "supply" || chartLegend === "both";
-        const durationSlices = { "7D": 2, "3M": 4, "1Y": 7, "5Y": 7 };
+        const showDemand = chartLegend.demand;
+        const showSupply = chartLegend.supply;
+        // Interpolate sparse source data into daily granularity
+        const durationDays = { "7D": 7, "1M": 30, "3M": 90, "1Y": 365, "5Y": 365 };
+        const durationSlices = { "7D": 2, "1M": 3, "3M": 4, "1Y": 7, "5Y": 7 };
         const sliceLen = Math.min(durationSlices[chartDuration] || 7, d.length);
         const slicedD = d.slice(d.length - sliceLen);
         const slicedSupply = supplyTrend.slice(supplyTrend.length - sliceLen);
-        const dateLabels = genDateLabels(chartDuration, sliceLen);
-        const slicedMonths = dateLabels;
-        const visibleVals = [...(showDemand ? slicedD : []), ...(showSupply ? slicedSupply : [])].map((v) => v * 1000);
+        const totalDays = durationDays[chartDuration] || 90;
+        // Linear interpolation from sparse points to daily
+        const interpolateDaily = (sparse, days) => {
+          if (sparse.length < 2) return sparse;
+          const daily = [];
+          for (let day = 0; day < days; day++) {
+            const frac = day / (days - 1);
+            const srcIdx = frac * (sparse.length - 1);
+            const lo = Math.floor(srcIdx);
+            const hi = Math.min(lo + 1, sparse.length - 1);
+            const t = srcIdx - lo;
+            // Add slight daily variance for realism
+            const base = sparse[lo] + (sparse[hi] - sparse[lo]) * t;
+            const jitter = (Math.sin(day * 3.7 + lo * 2.1) * 0.03 + Math.cos(day * 1.3) * 0.02) * base;
+            daily.push(Math.round((base + jitter) * 100) / 100);
+          }
+          return daily;
+        };
+        const dailyD = interpolateDaily(slicedD, totalDays);
+        const dailyS = interpolateDaily(slicedSupply, totalDays);
+        // Generate daily date labels
+        const now = new Date();
+        const dailyLabels = [];
+        for (let i = totalDays - 1; i >= 0; i--) {
+          const dt = new Date(now);
+          dt.setDate(dt.getDate() - i);
+          dailyLabels.push(
+            dt.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: chartDuration === "1Y" || chartDuration === "5Y" ? "2-digit" : undefined,
+            }),
+          );
+        }
+        const visibleVals = [...(showDemand ? dailyD : []), ...(showSupply ? dailyS : [])].map((v) => v * 1000);
         const cMax = visibleVals.length ? Math.max(...visibleVals) : chartMax;
         const cMin = visibleVals.length ? Math.min(...visibleVals) : chartMin;
         const cRange = cMax - cMin || 1;
         const cPad = { top: 20, bottom: 8, left: 0, right: 0 };
         const cPlotW = chartW - cPad.left - cPad.right;
         const cPlotH = chartH - cPad.top - cPad.bottom;
-        const dPts = slicedD.map((v, i) => ({
-          x: cPad.left + (sliceLen > 1 ? (i / (sliceLen - 1)) * cPlotW : cPlotW / 2),
+        const ptCount = dailyD.length;
+        const dPts = dailyD.map((v, i) => ({
+          x: cPad.left + (ptCount > 1 ? (i / (ptCount - 1)) * cPlotW : cPlotW / 2),
           y: cPad.top + cPlotH - ((v * 1000 - cMin) / cRange) * cPlotH,
           val: v,
         }));
-        const sPts = slicedSupply.map((v, i) => ({
-          x: cPad.left + (sliceLen > 1 ? (i / (sliceLen - 1)) * cPlotW : cPlotW / 2),
+        const sPts = dailyS.map((v, i) => ({
+          x: cPad.left + (ptCount > 1 ? (i / (ptCount - 1)) * cPlotW : cPlotW / 2),
           y: cPad.top + cPlotH - ((v * 1000 - cMin) / cRange) * cPlotH,
           val: v,
         }));
@@ -932,7 +997,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
         const sLine = sPts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
         const dArea = `${dLine} L${dPts[dPts.length - 1].x},${cPad.top + cPlotH} L${dPts[0].x},${cPad.top + cPlotH} Z`;
         const sArea = `${sLine} L${sPts[sPts.length - 1].x},${cPad.top + cPlotH} L${sPts[0].x},${cPad.top + cPlotH} Z`;
-        const hIdx = chartHoverIdx !== null && chartHoverIdx < sliceLen ? chartHoverIdx : null;
+        const hIdx = chartHoverIdx !== null && chartHoverIdx < ptCount ? chartHoverIdx : null;
 
         const handleChartInteraction = (e) => {
           const svg = chartSvgRef.current;
@@ -941,8 +1006,8 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
           const clientX = e.touches ? e.touches[0].clientX : e.clientX;
           const relX = clientX - rect.left - cPad.left;
           const frac = relX / cPlotW;
-          const idx = Math.round(frac * (sliceLen - 1));
-          setChartHoverIdx(Math.max(0, Math.min(sliceLen - 1, idx)));
+          const idx = Math.round(frac * (ptCount - 1));
+          setChartHoverIdx(Math.max(0, Math.min(ptCount - 1, idx)));
         };
 
         return (
@@ -1012,33 +1077,13 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                     />
                   </>
                 )}
-                {/* Data points — subtle unless hovered */}
-                {showDemand &&
-                  dPts.map((p, i) => (
-                    <circle
-                      key={`dp${i}`}
-                      cx={p.x}
-                      cy={p.y}
-                      r={hIdx === i ? 5 : 2.5}
-                      fill={hIdx === i ? blue : "rgba(66,165,245,.35)"}
-                      stroke={hIdx === i ? "#fff" : "none"}
-                      strokeWidth={hIdx === i ? 1.5 : 0}
-                      style={{ transition: "r .15s, fill .15s" }}
-                    />
-                  ))}
-                {showSupply &&
-                  sPts.map((p, i) => (
-                    <circle
-                      key={`sp${i}`}
-                      cx={p.x}
-                      cy={p.y}
-                      r={hIdx === i ? 4 : 2}
-                      fill={hIdx === i ? orange : "rgba(255,167,38,.35)"}
-                      stroke={hIdx === i ? "#fff" : "none"}
-                      strokeWidth={hIdx === i ? 1.5 : 0}
-                      style={{ transition: "r .15s, fill .15s" }}
-                    />
-                  ))}
+                {/* Hovered data point only (daily granularity = too many to render all) */}
+                {hIdx !== null && showDemand && (
+                  <circle cx={dPts[hIdx].x} cy={dPts[hIdx].y} r={5} fill={blue} stroke="#fff" strokeWidth={1.5} />
+                )}
+                {hIdx !== null && showSupply && (
+                  <circle cx={sPts[hIdx].x} cy={sPts[hIdx].y} r={4} fill={orange} stroke="#fff" strokeWidth={1.5} />
+                )}
                 {/* Vertical trace line on hover */}
                 {hIdx !== null && (
                   <line
@@ -1071,13 +1116,13 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                   }}
                 >
                   <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.4)", marginBottom: 4 }}>
-                    {slicedMonths[hIdx]}
+                    {dailyLabels[hIdx]}
                   </div>
                   {showDemand && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: showSupply ? 3 : 0 }}>
                       <div style={{ width: 6, height: 6, borderRadius: 6, background: blue }} />
                       <span style={{ fontFamily: ft.mono, fontSize: 10, color: blue, fontWeight: 600 }}>
-                        {slicedD[hIdx]}K
+                        {Math.round(dailyD[hIdx] * 10) / 10}K
                       </span>
                       <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>demand</span>
                     </div>
@@ -1086,7 +1131,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <div style={{ width: 6, height: 6, borderRadius: 6, background: orange }} />
                       <span style={{ fontFamily: ft.mono, fontSize: 10, color: orange, fontWeight: 600 }}>
-                        {slicedSupply[hIdx]}K
+                        {Math.round(dailyS[hIdx] * 10) / 10}K
                       </span>
                       <span style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.25)" }}>supply</span>
                     </div>
@@ -1094,8 +1139,8 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                   {showDemand && showSupply && (
                     <div style={{ marginTop: 3, borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: 3 }}>
                       <span style={{ fontFamily: ft.mono, fontSize: 9, color: green, fontWeight: 600 }}>
-                        {slicedD[hIdx] > slicedSupply[hIdx] ? "+" : ""}
-                        {slicedD[hIdx] - slicedSupply[hIdx]}K gap
+                        {dailyD[hIdx] > dailyS[hIdx] ? "+" : ""}
+                        {Math.round((dailyD[hIdx] - dailyS[hIdx]) * 10) / 10}K gap
                       </span>
                     </div>
                   )}
@@ -1113,35 +1158,89 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                 padding: "0 2px",
               }}
             >
-              <div style={{ display: "flex", gap: 2 }}>
-                {[
-                  { value: "demand", label: "Demand", color: blue },
-                  { value: "supply", label: "Supply", color: orange },
-                  { value: "both", label: "Both", color: blue },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setChartLegend(opt.value)}
+              <div ref={legendRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setLegendOpen((p) => !p)}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: blue,
+                    background: "rgba(66,165,245,.08)",
+                    border: "1px solid rgba(66,165,245,.12)",
+                    borderRadius: 6,
+                    padding: "5px 10px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  {[chartLegend.demand && "Demand", chartLegend.supply && "Supply"].filter(Boolean).join(", ") ||
+                    "None"}
+                  <span style={{ fontSize: 8, opacity: 0.5 }}>{legendOpen ? "▲" : "▼"}</span>
+                </button>
+                {legendOpen && (
+                  <div
                     style={{
-                      fontFamily: ft.mono,
-                      fontSize: 10,
-                      fontWeight: chartLegend === opt.value ? 700 : 500,
-                      color: chartLegend === opt.value ? opt.color : "rgba(255,255,255,.25)",
-                      background: chartLegend === opt.value ? `${opt.color}14` : "transparent",
-                      border: "none",
-                      borderRadius: 5,
-                      padding: "5px 10px",
-                      cursor: "pointer",
-                      transition: "all .15s",
+                      position: "absolute",
+                      top: "calc(100% + 4px)",
+                      left: 0,
+                      background: "rgba(10,15,26,.98)",
+                      border: "1px solid rgba(66,165,245,.15)",
+                      borderRadius: 8,
+                      padding: "6px 0",
+                      zIndex: 20,
+                      minWidth: 140,
+                      boxShadow: "0 4px 20px rgba(0,0,0,.4)",
                     }}
                   >
-                    {opt.label}
-                  </button>
-                ))}
+                    {[
+                      { key: "demand", label: "Demand", color: blue },
+                      { key: "supply", label: "Supply", color: orange },
+                    ].map((opt) => (
+                      <label
+                        key={opt.key}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "7px 12px",
+                          cursor: "pointer",
+                          fontFamily: ft.mono,
+                          fontSize: 11,
+                          color: chartLegend[opt.key] ? opt.color : "rgba(255,255,255,.35)",
+                          transition: "background .15s",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,.04)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={chartLegend[opt.key]}
+                          onChange={() => setChartLegend((prev) => ({ ...prev, [opt.key]: !prev[opt.key] }))}
+                          style={{ accentColor: opt.color, width: 14, height: 14, cursor: "pointer" }}
+                        />
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 8,
+                              background: opt.color,
+                              opacity: chartLegend[opt.key] ? 1 : 0.3,
+                            }}
+                          />
+                          {opt.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: 2 }}>
-                {["7D", "3M", "1Y", "5Y"].map((dur) => (
+                {["7D", "1M", "3M", "1Y", "5Y"].map((dur) => (
                   <button
                     key={dur}
                     onClick={() => setChartDuration(dur)}
@@ -1907,8 +2006,16 @@ function Intents({ mob, tab }) {
           if (mktMatch) {
             setDetailId(mktMatch.id);
           } else {
-            // Try matching by query for MOCK_INTENTS-sourced related signals
-            const mkt = INTENT_MARKET.find((m) => m.query === r.query);
+            // Try exact query match first, then fuzzy (first word overlap)
+            const queryLower = (r.query || r.queries || "").toLowerCase();
+            const mkt =
+              INTENT_MARKET.find((m) => m.query?.toLowerCase() === queryLower) ||
+              INTENT_MARKET.find((m) => {
+                const words = queryLower.split(/\s+/);
+                const mWords = (m.query || "").toLowerCase().split(/\s+/);
+                return words.some((w) => w.length > 3 && mWords.includes(w));
+              }) ||
+              INTENT_MARKET.find((m) => m.vertical === r.vertical);
             if (mkt) setDetailId(mkt.id);
           }
         }}
@@ -3110,10 +3217,26 @@ function Intents({ mob, tab }) {
                 tab={tab}
                 onClose={() => setFocused(null)}
                 onActivate={(r) => {
-                  const mkt = INTENT_MARKET.find((m) => m.query === r.query);
-                  if (mkt) {
-                    setDetailId(mkt.id);
+                  const mktId = r.id?.toString().startsWith("mkt-")
+                    ? INTENT_MARKET.find((m) => `mkt-${m.id}` === r.id)?.id
+                    : null;
+                  if (mktId) {
+                    setDetailId(mktId);
                     setFocused(null);
+                  } else {
+                    const queryLower = (r.query || r.queries || "").toLowerCase();
+                    const mkt =
+                      INTENT_MARKET.find((m) => m.query?.toLowerCase() === queryLower) ||
+                      INTENT_MARKET.find((m) => {
+                        const words = queryLower.split(/\s+/);
+                        const mWords = (m.query || "").toLowerCase().split(/\s+/);
+                        return words.some((w) => w.length > 3 && mWords.includes(w));
+                      }) ||
+                      INTENT_MARKET.find((m) => m.vertical === r.vertical);
+                    if (mkt) {
+                      setDetailId(mkt.id);
+                      setFocused(null);
+                    }
                   }
                 }}
               />
@@ -5567,14 +5690,17 @@ function Live({ mob, tab }) {
           if (live) {
             setDetailSig(live.id);
           } else {
-            // Handle mkt- prefixed IDs — find matching live signal by query
-            const mkt = INTENT_MARKET.find((m) => `mkt-${m.id}` === r.id);
-            if (mkt) {
-              const matchingLive = LIVE_SIGNALS.find(
-                (s) => s.query?.toLowerCase() === mkt.query?.toLowerCase() || s.vertical === mkt.vertical,
-              );
-              if (matchingLive) setDetailSig(matchingLive.id);
-            }
+            // Handle mkt- prefixed IDs — find matching live signal by query, then fuzzy
+            const mkt = r.id?.toString().startsWith("mkt-") ? INTENT_MARKET.find((m) => `mkt-${m.id}` === r.id) : null;
+            const queryLower = (mkt?.query || r.query || r.queries || "").toLowerCase();
+            const matchingLive =
+              LIVE_SIGNALS.find((s) => s.query?.toLowerCase() === queryLower) ||
+              LIVE_SIGNALS.find((s) => {
+                const words = queryLower.split(/\s+/);
+                return words.some((w) => w.length > 3 && (s.query || "").toLowerCase().includes(w));
+              }) ||
+              LIVE_SIGNALS.find((s) => s.vertical === (r.vertical || mkt?.vertical));
+            if (matchingLive) setDetailSig(matchingLive.id);
           }
         }}
       />
