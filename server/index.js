@@ -1225,7 +1225,7 @@ export default app;
 
 const isDirectRun =
   process.argv[1] &&
-  import.meta.url === `file://${process.argv[1]}`;
+  import.meta.url === `file://${resolve(process.argv[1])}`;
 
 if (isDirectRun) {
   const server = serve({ fetch: app.fetch, port, hostname }, async () => {
