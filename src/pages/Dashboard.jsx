@@ -714,7 +714,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
 
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, []);
+  }, [signal?.id]);
 
   const budgetNum = parseFloat(weeklyBudget.replace(/[^0-9.]/g, "")) || 0;
   const monthlyEst = Math.round(budgetNum * 4.33);
@@ -1252,7 +1252,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                 boxShadow: "0 4px 24px rgba(66,165,245,.25)",
               }}
             >
-              {budgetSaved ? "Manage Budget" : budgetFlow === "many" ? "Create Multi-Agent Budget" : "Create Budget"} →
+              {budgetSaved ? "Manage Budget" : budgetFlow === "many" ? "Manage Budget" : "Create Budget"} →
             </button>
           )}
 
@@ -5523,6 +5523,12 @@ function Live({ mob, tab }) {
         mob={mob}
         tab={tab}
         onClose={() => setDetailSig(null)}
+        onActivate={(r) => {
+          const live = LIVE_SIGNALS.find((s) => s.id === r.id);
+          if (live) {
+            setDetailSig(live.id);
+          }
+        }}
       />
     );
   }
