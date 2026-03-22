@@ -709,7 +709,7 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const [budgetSaved, setBudgetSaved] = useState(false);
   const [chartHoverIdx, setChartHoverIdx] = useState(null);
   const [chartLegend, setChartLegend] = useState("demand"); // "demand" | "supply" | "both"
-  const [chartDuration, setChartDuration] = useState("6M"); // "1M" | "3M" | "6M" | "1Y"
+  const [chartDuration, setChartDuration] = useState("3M"); // "7D" | "3M" | "1Y" | "5Y"
   const chartSvgRef = useRef(null);
 
   useEffect(() => {
@@ -742,7 +742,39 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
   const pad = { top: 16, bottom: 8, left: 0, right: 0 };
   const plotW = chartW - pad.left - pad.right;
   const plotH = chartH - pad.top - pad.bottom;
-  const months = ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+  // Generate date labels based on selected duration
+  const genDateLabels = (duration, count) => {
+    const now = new Date();
+    const labels = [];
+    if (duration === "7D") {
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * Math.floor(7 / (count - 1 || 1)));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+      }
+    } else if (duration === "3M") {
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i * Math.floor(90 / (count - 1 || 1)));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+      }
+    } else if (duration === "1Y") {
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setMonth(d.getMonth() - i * Math.floor(12 / (count - 1 || 1)));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }));
+      }
+    } else {
+      // 5Y
+      for (let i = count - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setFullYear(d.getFullYear() - i * Math.floor(5 / (count - 1 || 1)));
+        labels.push(d.toLocaleDateString("en-US", { month: "short", year: "2-digit" }));
+      }
+    }
+    return labels;
+  };
+  const months = genDateLabels(chartDuration, 7);
   const agentCount = signal.agents || matchingAgents.length || Math.max(1, Math.round(competition / 20));
   const catColor = signal.catColor || "#78909C";
 
@@ -873,11 +905,12 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
       {(() => {
         const showDemand = chartLegend === "demand" || chartLegend === "both";
         const showSupply = chartLegend === "supply" || chartLegend === "both";
-        const durationSlices = { "1M": 2, "3M": 4, "6M": 7, "1Y": 7 };
+        const durationSlices = { "7D": 2, "3M": 4, "1Y": 7, "5Y": 7 };
         const sliceLen = Math.min(durationSlices[chartDuration] || 7, d.length);
         const slicedD = d.slice(d.length - sliceLen);
         const slicedSupply = supplyTrend.slice(supplyTrend.length - sliceLen);
-        const slicedMonths = months.slice(months.length - sliceLen);
+        const dateLabels = genDateLabels(chartDuration, sliceLen);
+        const slicedMonths = dateLabels;
         const visibleVals = [...(showDemand ? slicedD : []), ...(showSupply ? slicedSupply : [])].map((v) => v * 1000);
         const cMax = visibleVals.length ? Math.max(...visibleVals) : chartMax;
         const cMin = visibleVals.length ? Math.min(...visibleVals) : chartMin;
@@ -1080,42 +1113,35 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
                 padding: "0 2px",
               }}
             >
-              <select
-                value={chartLegend}
-                onChange={(e) => setChartLegend(e.target.value)}
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,.5)",
-                  background: "rgba(255,255,255,.03)",
-                  border: "1px solid rgba(255,255,255,.06)",
-                  borderRadius: 6,
-                  padding: "5px 10px",
-                  outline: "none",
-                  cursor: "pointer",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  backgroundImage:
-                    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E\")",
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 8px center",
-                  paddingRight: 24,
-                }}
-              >
-                <option value="demand" style={{ background: "#0A0F1A" }}>
-                  Demand
-                </option>
-                <option value="supply" style={{ background: "#0A0F1A" }}>
-                  Supply
-                </option>
-                <option value="both" style={{ background: "#0A0F1A" }}>
-                  Both
-                </option>
-              </select>
+              <div style={{ display: "flex", gap: 2 }}>
+                {[
+                  { value: "demand", label: "Demand", color: blue },
+                  { value: "supply", label: "Supply", color: orange },
+                  { value: "both", label: "Both", color: blue },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setChartLegend(opt.value)}
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 10,
+                      fontWeight: chartLegend === opt.value ? 700 : 500,
+                      color: chartLegend === opt.value ? opt.color : "rgba(255,255,255,.25)",
+                      background: chartLegend === opt.value ? `${opt.color}14` : "transparent",
+                      border: "none",
+                      borderRadius: 5,
+                      padding: "5px 10px",
+                      cursor: "pointer",
+                      transition: "all .15s",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
 
               <div style={{ display: "flex", gap: 2 }}>
-                {["1M", "3M", "6M", "1Y"].map((dur) => (
+                {["7D", "3M", "1Y", "5Y"].map((dur) => (
                   <button
                     key={dur}
                     onClick={() => setChartDuration(dur)}
@@ -1872,6 +1898,19 @@ function Intents({ mob, tab }) {
         tab={tab}
         onClose={() => {
           setDetailId(null);
+        }}
+        onActivate={(r) => {
+          // Handle mkt- prefixed IDs from INTENT_MARKET related signals
+          const mktMatch = r.id?.toString().startsWith("mkt-")
+            ? INTENT_MARKET.find((m) => `mkt-${m.id}` === r.id)
+            : null;
+          if (mktMatch) {
+            setDetailId(mktMatch.id);
+          } else {
+            // Try matching by query for MOCK_INTENTS-sourced related signals
+            const mkt = INTENT_MARKET.find((m) => m.query === r.query);
+            if (mkt) setDetailId(mkt.id);
+          }
         }}
       />
     );
@@ -5527,6 +5566,15 @@ function Live({ mob, tab }) {
           const live = LIVE_SIGNALS.find((s) => s.id === r.id);
           if (live) {
             setDetailSig(live.id);
+          } else {
+            // Handle mkt- prefixed IDs — find matching live signal by query
+            const mkt = INTENT_MARKET.find((m) => `mkt-${m.id}` === r.id);
+            if (mkt) {
+              const matchingLive = LIVE_SIGNALS.find(
+                (s) => s.query?.toLowerCase() === mkt.query?.toLowerCase() || s.vertical === mkt.vertical,
+              );
+              if (matchingLive) setDetailSig(matchingLive.id);
+            }
           }
         }}
       />
