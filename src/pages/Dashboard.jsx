@@ -157,6 +157,62 @@ function DurationDropdown({ value, onChange, options }) {
   );
 }
 
+// ─── REVENUE DATE RANGE PICKER ───
+function getDefaultDateRange() {
+  const to = new Date();
+  const from = new Date();
+  from.setMonth(from.getMonth() - 6);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+const dateInputStyle = {
+  fontFamily: ft.mono,
+  fontSize: 10,
+  fontWeight: 600,
+  background: "rgba(255,255,255,.03)",
+  color: blue,
+  border: "1px solid rgba(66,165,245,.15)",
+  padding: "4px 8px",
+  borderRadius: 5,
+  letterSpacing: ".04em",
+  outline: "none",
+  colorScheme: "dark",
+};
+
+function RevenueDateRange({ from, to, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
+      <span
+        style={{
+          fontFamily: ft.mono,
+          fontSize: 8,
+          fontWeight: 600,
+          color: "rgba(255,255,255,.35)",
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+        }}
+      >
+        From
+      </span>
+      <input type="date" value={from} onChange={(e) => onChange({ from: e.target.value, to })} style={dateInputStyle} />
+      <span
+        style={{
+          fontFamily: ft.mono,
+          fontSize: 8,
+          fontWeight: 600,
+          color: "rgba(255,255,255,.35)",
+          letterSpacing: ".06em",
+          textTransform: "uppercase",
+        }}
+      >
+        To
+      </span>
+      <input type="date" value={to} onChange={(e) => onChange({ from, to: e.target.value })} style={dateInputStyle} />
+    </div>
+  );
+}
+
 // ─── EMPTY STATE COMPONENT ───
 function EmptyState({
   icon = "◎",
@@ -216,7 +272,7 @@ function Dashboard({ mob, tab }) {
   } = useData();
   const [txnFilter, setTxnFilter] = useState("all");
   const [perfVert, setPerfVert] = useState("all");
-  const [duration, setDuration] = useState("1Y");
+  const [revDateRange, setRevDateRange] = useState(getDefaultDateRange);
 
   const filteredTxns = txnFilter === "all" ? TRANSACTIONS : TRANSACTIONS.filter((t) => t.type === txnFilter);
   const totalRevenue = REVENUE_MONTHS.reduce((s, m) => s + m.total, 0);
@@ -390,16 +446,7 @@ function Dashboard({ mob, tab }) {
         <Card mob={mob}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <h3 style={{ fontFamily: ft.display, fontSize: 14, fontWeight: 700 }}>Revenue</h3>
-            <DurationDropdown
-              value={duration}
-              onChange={setDuration}
-              options={[
-                { k: "7D", l: "7D" },
-                { k: "3M", l: "3M" },
-                { k: "1Y", l: "1Y" },
-                { k: "5Y", l: "5Y" },
-              ]}
-            />
+            <RevenueDateRange from={revDateRange.from} to={revDateRange.to} onChange={setRevDateRange} />
           </div>
           <BarChart
             data={REVENUE_MONTHS}
