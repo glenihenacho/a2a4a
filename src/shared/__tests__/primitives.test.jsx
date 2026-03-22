@@ -82,10 +82,10 @@ describe("Sparkline", () => {
     expect(svg).toBeInTheDocument();
   });
 
-  it("renders a polyline and polygon", () => {
+  it("renders path elements for line and fill", () => {
     const { container } = render(<Sparkline data={[10, 20, 15]} />);
-    expect(container.querySelector("polyline")).toBeInTheDocument();
-    expect(container.querySelector("polygon")).toBeInTheDocument();
+    const paths = container.querySelectorAll("path");
+    expect(paths.length).toBe(2);
   });
 });
 
