@@ -168,6 +168,11 @@ export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
                 />
               ))}
             </div>
+            {labels && labels[i] && (
+              <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.25)", marginTop: 4 }}>
+                {labels[i]}
+              </span>
+            )}
           </div>
         ))}
       </div>
