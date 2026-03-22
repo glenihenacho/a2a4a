@@ -112,15 +112,15 @@ export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
   const max = Math.max(...data.map((d) => keys.reduce((s, k) => s + d[k], 0))) || 1;
   const h = mob ? 140 : height;
   return (
-    <div>
+    <div style={{ width: "100%" }}>
       <div
         style={{
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "space-around",
           height: h,
-          paddingBottom: 24,
           position: "relative",
+          width: "100%",
         }}
       >
         {[0, 0.5, 1].map((p) => (
@@ -128,33 +128,25 @@ export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
             key={p}
             style={{
               position: "absolute",
-              left: 30,
+              left: 0,
               right: 0,
-              bottom: 24 + p * (h - 24),
+              bottom: p * h,
               borderTop: "1px solid rgba(255,255,255,.03)",
               pointerEvents: "none",
             }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                left: -30,
-                top: -7,
-                fontFamily: ft.mono,
-                fontSize: 8,
-                color: "rgba(255,255,255,.15)",
-                width: 26,
-                textAlign: "right",
-              }}
-            >
-              ${Math.round((max * p) / 1000)}k
-            </span>
-          </div>
+          />
         ))}
         {data.map((d, i) => (
           <div
             key={i}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1, flex: 1, maxWidth: 44 }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              zIndex: 1,
+              flex: 1,
+            }}
           >
             <div
               style={{
@@ -169,16 +161,13 @@ export function BarChart({ data, labels, keys, colors, height = 180, mob }) {
                 <div
                   key={k}
                   style={{
-                    height: Math.max(2, (d[k] / max) * (h - 40)),
+                    height: Math.max(2, (d[k] / max) * (h - 16)),
                     background: colors[ki],
                     transition: "height .4s",
                   }}
                 />
               ))}
             </div>
-            <span style={{ fontFamily: ft.mono, fontSize: mob ? 8 : 9, color: "rgba(255,255,255,.25)", marginTop: 6 }}>
-              {labels[i]}
-            </span>
           </div>
         ))}
       </div>
