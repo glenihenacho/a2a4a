@@ -2740,34 +2740,29 @@ function Intents({ mob, tab }) {
               {s.l}
             </button>
           ))}
-          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
-          <select
-            value={durationIdx}
-            onChange={(e) => setDurationIdx(e.target.value)}
-            style={{
-              fontFamily: ft.mono,
-              fontSize: 9,
-              fontWeight: 600,
-              background: "rgba(255,255,255,.015)",
-              color: blue,
-              border: "1px solid rgba(66,165,245,.15)",
-              padding: "4px 8px",
-              borderRadius: 5,
-              cursor: "pointer",
-              appearance: "none",
-              WebkitAppearance: "none",
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2342A5F5' opacity='.6'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 6px center",
-              paddingRight: 20,
-            }}
-          >
-            {DURATION_OPTS.map((d) => (
-              <option key={d.k} value={d.k} style={{ background: "#0a0e18", color: "#E3F2FD" }}>
-                {d.l}
-              </option>
-            ))}
-          </select>
+        </div>
+        <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+          {DURATION_OPTS.map((d) => (
+            <button
+              key={d.k}
+              onClick={() => setDurationIdx(d.k)}
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: 4,
+                cursor: "pointer",
+                border: "none",
+                background: durationIdx === d.k ? "rgba(66,165,245,.1)" : "transparent",
+                color: durationIdx === d.k ? blue : "rgba(255,255,255,.25)",
+                textTransform: "uppercase",
+                letterSpacing: ".05em",
+              }}
+            >
+              {d.l}
+            </button>
+          ))}
         </div>
         {industryTags.length > 0 && (
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -5848,35 +5843,29 @@ function Live({ mob, tab }) {
               {s.l}
             </button>
           ))}
-          <div style={{ width: 1, height: 16, background: "rgba(255,255,255,.06)", margin: "0 4px" }} />
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            style={{
-              fontFamily: ft.mono,
-              fontSize: 9,
-              fontWeight: 600,
-              background: "rgba(255,255,255,.015)",
-              color: blue,
-              border: "1px solid rgba(66,165,245,.12)",
-              padding: "4px 8px",
-              borderRadius: 5,
-              cursor: "pointer",
-              appearance: "none",
-              WebkitAppearance: "none",
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%2342A5F5' opacity='.6'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 6px center",
-              paddingRight: 20,
-              textTransform: "uppercase",
-            }}
-          >
-            {["7d", "3m", "1y", "5y"].map((d) => (
-              <option key={d} value={d} style={{ background: "#0a0e18", color: "#E3F2FD" }}>
-                {d.toUpperCase()}
-              </option>
-            ))}
-          </select>
+        </div>
+        <div style={{ display: "flex", gap: 3, marginLeft: "auto" }}>
+          {["7d", "3m", "1y", "5y"].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDuration(d)}
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 8,
+                fontWeight: 600,
+                padding: "3px 8px",
+                borderRadius: 4,
+                cursor: "pointer",
+                border: "none",
+                background: duration === d ? "rgba(66,165,245,.1)" : "transparent",
+                color: duration === d ? blue : "rgba(255,255,255,.25)",
+                textTransform: "uppercase",
+                letterSpacing: ".05em",
+              }}
+            >
+              {d.toUpperCase()}
+            </button>
+          ))}
         </div>
       </div>
 
