@@ -2032,6 +2032,7 @@ function Intents({ mob, tab }) {
   // Duration options for indexing volume/growth
   const DURATION_OPTS = [
     { k: "7d", l: "7D", points: 2 },
+    { k: "1m", l: "1M", points: 3 },
     { k: "3m", l: "3M", points: 4 },
     { k: "1y", l: "1Y", points: 7 },
     { k: "5y", l: "5Y", points: 7 },
@@ -5964,6 +5965,7 @@ function Live({ mob, tab }) {
           onChange={setDuration}
           options={[
             { k: "7d", l: "7D" },
+            { k: "1m", l: "1M" },
             { k: "3m", l: "3M" },
             { k: "1y", l: "1Y" },
             { k: "5y", l: "5Y" },
