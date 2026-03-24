@@ -1063,10 +1063,619 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
             {growth}%
           </span>
         </div>
-        <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 26, fontWeight: 700, lineHeight: 1.2 }}>
-          {signal.query}
-        </h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <h2 style={{ fontFamily: ft.display, fontSize: mob ? 20 : 26, fontWeight: 700, lineHeight: 1.2, margin: 0 }}>
+            {signal.query}
+          </h2>
+          {!mob && (
+            <button
+              onClick={() => setBudgetMode(budgetMode ? null : "create")}
+              style={{
+                fontFamily: ft.display,
+                fontSize: 13,
+                fontWeight: 700,
+                color: "#fff",
+                background: budgetSaved ? "rgba(102,187,106,.12)" : `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                border: budgetSaved ? "1px solid rgba(102,187,106,.2)" : "none",
+                padding: "8px 18px",
+                borderRadius: 10,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                boxShadow: budgetSaved ? "none" : "0 2px 12px rgba(66,165,245,.2)",
+              }}
+            >
+              {budgetSaved
+                ? `✓ $${budgetNum.toLocaleString()}/wk`
+                : budgetFlow === "many"
+                  ? "Manage Budget →"
+                  : "Create Budget →"}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Desktop inline budget panel */}
+      {!mob && budgetMode === "create" && (
+        <div
+          style={{
+            background: "rgba(10,15,26,.98)",
+            border: "1px solid rgba(66,165,245,.12)",
+            borderRadius: 14,
+            padding: 20,
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, margin: 0 }}>
+                {budgetFlow === "many" ? "Agent Budget Allocation" : "Set Weekly Budget"}
+              </h3>
+              <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)", marginTop: 2 }}>
+                {budgetFlow === "many"
+                  ? `${matchingAgents.length} ${signal.vertical} agents available`
+                  : "Budget held in escrow · SLA-enforced delivery"}
+              </div>
+            </div>
+            <button
+              onClick={() => setBudgetMode(null)}
+              style={{
+                fontFamily: ft.mono,
+                fontSize: 14,
+                color: "rgba(255,255,255,.2)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "2px 6px",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {budgetFlow === "one" || budgetFlow === "none" ? (
+            <>
+              {!budgetSaved ? (
+                <div>
+                  <div
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,.25)",
+                      textTransform: "uppercase",
+                      letterSpacing: ".08em",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Weekly Budget (USD)
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    <div style={{ flex: 1, position: "relative", maxWidth: 280 }}>
+                      <span
+                        style={{
+                          position: "absolute",
+                          left: 14,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          fontFamily: ft.display,
+                          fontSize: 18,
+                          fontWeight: 700,
+                          color: "rgba(255,255,255,.15)",
+                        }}
+                      >
+                        $
+                      </span>
+                      <input
+                        value={weeklyBudget}
+                        onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
+                        placeholder="500"
+                        autoFocus
+                        style={{
+                          width: "100%",
+                          fontFamily: ft.display,
+                          fontSize: 22,
+                          fontWeight: 700,
+                          background: "rgba(0,0,0,.25)",
+                          border: "1px solid rgba(66,165,245,.12)",
+                          borderRadius: 10,
+                          padding: "12px 14px 12px 32px",
+                          color: "#E3F2FD",
+                          outline: "none",
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                    {[250, 500, 1000, 2000, 5000].map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setWeeklyBudget(String(v))}
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
+                          background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
+                          border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
+                          padding: "5px 10px",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ${v.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                  {budgetNum > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        padding: "8px 12px",
+                        background: "rgba(255,255,255,.015)",
+                        borderRadius: 8,
+                        marginBottom: 10,
+                        maxWidth: 320,
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 8,
+                            color: "rgba(255,255,255,.2)",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Monthly
+                        </div>
+                        <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#E3F2FD" }}>
+                          ${monthlyEst.toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 8,
+                            color: "rgba(255,255,255,.2)",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Cost/1K
+                        </div>
+                        <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
+                          ${signal.vol > 0 ? (monthlyEst / (signal.vol / 1000)).toFixed(2) : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {matchingAgents.length === 1 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flex: 1,
+                          padding: "8px 10px",
+                          background: "rgba(66,165,245,.03)",
+                          borderRadius: 8,
+                          border: "1px solid rgba(66,165,245,.08)",
+                          maxWidth: 240,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontFamily: ft.display,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {matchingAgents[0].name?.charAt(0)}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>{matchingAgents[0].name}</div>
+                          <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                            Rep {matchingAgents[0].stats?.reputation || 0}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (budgetNum > 0) {
+                        setGoingLive(true);
+                        if (matchingAgents.length === 1) setSelectedAgent(matchingAgents[0]);
+                        setTimeout(() => {
+                          setBudgetSaved(true);
+                          setGoingLive(false);
+                          setBudgetMode(null);
+                        }, 1200);
+                      }
+                    }}
+                    disabled={budgetNum <= 0}
+                    style={{
+                      width: "100%",
+                      maxWidth: 320,
+                      fontFamily: ft.display,
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#fff",
+                      background:
+                        budgetNum > 0
+                          ? goingLive
+                            ? "rgba(66,165,245,.15)"
+                            : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                          : "rgba(255,255,255,.04)",
+                      border: "none",
+                      padding: "12px 0",
+                      borderRadius: 10,
+                      cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
+                      opacity: budgetNum > 0 ? 1 : 0.4,
+                      transition: "all .3s",
+                      marginTop: 10,
+                    }}
+                  >
+                    {goingLive
+                      ? "Activating..."
+                      : matchingAgents.length === 1
+                        ? `Go Live with ${matchingAgents[0].name} →`
+                        : "Go Live →"}
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        background: "rgba(102,187,106,.1)",
+                        border: "1px solid rgba(102,187,106,.2)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 18,
+                        margin: "0 auto 8px",
+                      }}
+                    >
+                      ✓
+                    </div>
+                    <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#66BB6A" }}>
+                      Budget Active
+                    </div>
+                    <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 2 }}>
+                      ${budgetNum.toLocaleString()}/week{selectedAgent ? ` · ${selectedAgent.name}` : ""}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setBudgetSaved(false);
+                      setSelectedAgent(null);
+                    }}
+                    style={{
+                      width: "100%",
+                      fontFamily: ft.mono,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,.3)",
+                      background: "rgba(255,255,255,.02)",
+                      border: "1px solid rgba(255,255,255,.04)",
+                      padding: "8px 0",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Edit Budget
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <div>
+              <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                {matchingAgents
+                  .filter((agent) => agent.id in agentBudgets)
+                  .map((agent) => {
+                    const val = agentBudgets[agent.id] || "";
+                    return (
+                      <div
+                        key={agent.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "8px 10px",
+                          background: "rgba(255,255,255,.015)",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255,255,255,.03)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontFamily: ft.display,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {agent.name?.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {agent.name}
+                          </div>
+                          <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                            Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                          </div>
+                        </div>
+                        <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                          <span
+                            style={{
+                              position: "absolute",
+                              left: 8,
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              fontFamily: ft.mono,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: "rgba(255,255,255,.15)",
+                            }}
+                          >
+                            $
+                          </span>
+                          <input
+                            value={val}
+                            onChange={(e) => updateAgentBudgetAmt(agent.id, e.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="0"
+                            style={{
+                              width: "100%",
+                              fontFamily: ft.mono,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: "rgba(0,0,0,.25)",
+                              border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
+                              borderRadius: 6,
+                              padding: "6px 8px 6px 20px",
+                              color: "#E3F2FD",
+                              outline: "none",
+                              textAlign: "right",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                {/* Add New Agent selector */}
+                {(() => {
+                  const budgetedIds = new Set(Object.keys(agentBudgets));
+                  const unbudgeted = matchingAgents.filter((a) => !budgetedIds.has(a.id));
+                  if (unbudgeted.length === 0) return null;
+                  return (
+                    <div style={{ position: "relative" }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const menu = e.currentTarget.nextElementSibling;
+                          menu.style.display = menu.style.display === "block" ? "none" : "block";
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          width: "100%",
+                          padding: "8px 10px",
+                          background: "rgba(66,165,245,.03)",
+                          borderRadius: 8,
+                          border: "1px dashed rgba(66,165,245,.15)",
+                          cursor: "pointer",
+                          fontFamily: ft.mono,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: blue,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: "rgba(66,165,245,.08)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 16,
+                            color: blue,
+                            flexShrink: 0,
+                          }}
+                        >
+                          +
+                        </div>
+                        Add New Agent
+                      </button>
+                      <div
+                        style={{
+                          display: "none",
+                          position: "absolute",
+                          top: "100%",
+                          left: 0,
+                          right: 0,
+                          zIndex: 10,
+                          marginTop: 4,
+                          background: "rgba(10,15,26,.98)",
+                          border: "1px solid rgba(66,165,245,.12)",
+                          borderRadius: 10,
+                          padding: 6,
+                          maxHeight: 200,
+                          overflowY: "auto",
+                        }}
+                      >
+                        {unbudgeted.map((agent) => (
+                          <button
+                            key={agent.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateAgentBudgetAmt(agent.id, "0");
+                              e.currentTarget.parentElement.style.display = "none";
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 8,
+                              width: "100%",
+                              padding: "6px 8px",
+                              background: "transparent",
+                              border: "none",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              textAlign: "left",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "rgba(66,165,245,.06)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 24,
+                                height: 24,
+                                borderRadius: 6,
+                                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontFamily: ft.display,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {agent.name?.charAt(0)}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>{agent.name}</div>
+                              <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                                Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              {totalAllocated > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 10px",
+                    background: "rgba(66,165,245,.03)",
+                    borderRadius: 6,
+                    border: "1px solid rgba(66,165,245,.08)",
+                    marginBottom: 10,
+                    maxWidth: 400,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      color: "rgba(255,255,255,.25)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Total · ${totalAllocated.toLocaleString()}/wk
+                  </span>
+                  <span style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, color: blue }}>
+                    ${multiMonthlyEst.toLocaleString()}/mo
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  if (totalAllocated > 0) {
+                    setGoingLive(true);
+                    setTimeout(() => {
+                      setBudgetSaved(true);
+                      setGoingLive(false);
+                      setBudgetMode(null);
+                    }, 1200);
+                  }
+                }}
+                disabled={totalAllocated <= 0}
+                style={{
+                  width: "100%",
+                  maxWidth: 320,
+                  fontFamily: ft.display,
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: "#fff",
+                  background:
+                    totalAllocated > 0
+                      ? goingLive
+                        ? "rgba(66,165,245,.15)"
+                        : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                      : "rgba(255,255,255,.04)",
+                  border: "none",
+                  padding: "12px 0",
+                  borderRadius: 10,
+                  cursor: totalAllocated > 0 && !goingLive ? "pointer" : "not-allowed",
+                  opacity: totalAllocated > 0 ? 1 : 0.4,
+                  transition: "all .3s",
+                }}
+              >
+                {goingLive
+                  ? "Activating..."
+                  : `Allocate Budget to ${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length} Agent${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length !== 1 ? "s" : ""} →`}
+              </button>
+            </div>
+          )}
+
+          <div
+            style={{
+              fontFamily: ft.mono,
+              fontSize: 8,
+              color: "rgba(255,255,255,.1)",
+              textAlign: "center",
+              marginTop: 8,
+            }}
+          >
+            Budget held in escrow · Agents bid competitively · SLA-enforced delivery
+          </div>
+        </div>
+      )}
 
       {/* Indexable Popularity Chart */}
       {(() => {
@@ -1483,502 +2092,633 @@ function SignalDetail({ signal, agents, relatedSignals, mob, tab, onClose, onAct
         </Card>
       )}
 
-      {/* ─── FLOATING FIXED BUDGET BAR ─── */}
-      <div
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 999,
-          background: "linear-gradient(180deg, rgba(6,10,18,0) 0%, rgba(6,10,18,.95) 20%, rgba(6,10,18,.99) 100%)",
-          padding: mob ? "20px 16px 16px" : "20px 32px 20px",
-        }}
-      >
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          {/* Collapsed state — just the CTA button */}
-          {!budgetMode && (
-            <button
-              onClick={() => setBudgetMode("create")}
-              style={{
-                width: "100%",
-                fontFamily: ft.display,
-                fontSize: 16,
-                fontWeight: 700,
-                color: "#fff",
-                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                border: "none",
-                padding: "14px 0",
-                borderRadius: 12,
-                cursor: "pointer",
-                boxShadow: "0 4px 24px rgba(66,165,245,.25)",
-              }}
-            >
-              {budgetSaved ? "Manage Budget" : budgetFlow === "many" ? "Manage Budget" : "Create Budget"} →
-            </button>
-          )}
+      {/* ─── FLOATING FIXED BUDGET BAR (mobile only) ─── */}
+      {mob && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 999,
+            background: "linear-gradient(180deg, rgba(6,10,18,0) 0%, rgba(6,10,18,.95) 20%, rgba(6,10,18,.99) 100%)",
+            padding: "20px 16px 16px",
+          }}
+        >
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            {/* Collapsed state — just the CTA button */}
+            {!budgetMode && (
+              <button
+                onClick={() => setBudgetMode("create")}
+                style={{
+                  width: "100%",
+                  fontFamily: ft.display,
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: "#fff",
+                  background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                  border: "none",
+                  padding: "14px 0",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 24px rgba(66,165,245,.25)",
+                }}
+              >
+                {budgetSaved ? "Manage Budget" : budgetFlow === "many" ? "Manage Budget" : "Create Budget"} →
+              </button>
+            )}
 
-          {/* Expanded — Budget creation/management panel */}
-          {budgetMode === "create" && (
-            <div
-              style={{
-                background: "rgba(10,15,26,.98)",
-                border: "1px solid rgba(66,165,245,.12)",
-                borderRadius: 14,
-                padding: mob ? 16 : 20,
-                boxShadow: "0 -8px 40px rgba(0,0,0,.5)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div>
-                  <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700 }}>
-                    {budgetFlow === "many" ? "Agent Budget Allocation" : "Set Weekly Budget"}
-                  </h3>
-                  <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)", marginTop: 2 }}>
-                    {budgetFlow === "many"
-                      ? `${matchingAgents.length} ${signal.vertical} agents available`
-                      : "Budget held in escrow · SLA-enforced delivery"}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setBudgetMode(null)}
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 14,
-                    color: "rgba(255,255,255,.2)",
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "2px 6px",
-                  }}
+            {/* Expanded — Budget creation/management panel */}
+            {budgetMode === "create" && (
+              <div
+                style={{
+                  background: "rgba(10,15,26,.98)",
+                  border: "1px solid rgba(66,165,245,.12)",
+                  borderRadius: 14,
+                  padding: mob ? 16 : 20,
+                  boxShadow: "0 -8px 40px rgba(0,0,0,.5)",
+                }}
+              >
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}
                 >
-                  ✕
-                </button>
-              </div>
+                  <div>
+                    <h3 style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700 }}>
+                      {budgetFlow === "many" ? "Agent Budget Allocation" : "Set Weekly Budget"}
+                    </h3>
+                    <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)", marginTop: 2 }}>
+                      {budgetFlow === "many"
+                        ? `${matchingAgents.length} ${signal.vertical} agents available`
+                        : "Budget held in escrow · SLA-enforced delivery"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setBudgetMode(null)}
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 14,
+                      color: "rgba(255,255,255,.2)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: "2px 6px",
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
 
-              {budgetFlow === "one" || budgetFlow === "none" ? (
-                /* ─── SINGLE AGENT / SIMPLE BUDGET ─── */
-                <>
-                  {!budgetSaved ? (
-                    <div>
-                      <div
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: "rgba(255,255,255,.25)",
-                          textTransform: "uppercase",
-                          letterSpacing: ".08em",
-                          marginBottom: 8,
-                        }}
-                      >
-                        Weekly Budget (USD)
-                      </div>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                        <div style={{ flex: 1, position: "relative" }}>
-                          <span
-                            style={{
-                              position: "absolute",
-                              left: 14,
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              fontFamily: ft.display,
-                              fontSize: 18,
-                              fontWeight: 700,
-                              color: "rgba(255,255,255,.15)",
-                            }}
-                          >
-                            $
-                          </span>
-                          <input
-                            value={weeklyBudget}
-                            onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
-                            placeholder="500"
-                            autoFocus
-                            style={{
-                              width: "100%",
-                              fontFamily: ft.display,
-                              fontSize: 22,
-                              fontWeight: 700,
-                              background: "rgba(0,0,0,.25)",
-                              border: "1px solid rgba(66,165,245,.12)",
-                              borderRadius: 10,
-                              padding: "12px 14px 12px 32px",
-                              color: "#E3F2FD",
-                              outline: "none",
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-                        {[250, 500, 1000, 2000, 5000].map((v) => (
-                          <button
-                            key={v}
-                            onClick={() => setWeeklyBudget(String(v))}
-                            style={{
-                              fontFamily: ft.mono,
-                              fontSize: 10,
-                              fontWeight: 600,
-                              color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
-                              background: weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
-                              border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
-                              padding: "5px 10px",
-                              borderRadius: 6,
-                              cursor: "pointer",
-                            }}
-                          >
-                            ${v.toLocaleString()}
-                          </button>
-                        ))}
-                      </div>
-                      {budgetNum > 0 && (
+                {budgetFlow === "one" || budgetFlow === "none" ? (
+                  /* ─── SINGLE AGENT / SIMPLE BUDGET ─── */
+                  <>
+                    {!budgetSaved ? (
+                      <div>
                         <div
                           style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            padding: "8px 12px",
-                            background: "rgba(255,255,255,.015)",
-                            borderRadius: 8,
-                            marginBottom: 10,
+                            fontFamily: ft.mono,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            color: "rgba(255,255,255,.25)",
+                            textTransform: "uppercase",
+                            letterSpacing: ".08em",
+                            marginBottom: 8,
                           }}
                         >
-                          <div>
-                            <div
-                              style={{
-                                fontFamily: ft.mono,
-                                fontSize: 8,
-                                color: "rgba(255,255,255,.2)",
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              Monthly
-                            </div>
-                            <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#E3F2FD" }}>
-                              ${monthlyEst.toLocaleString()}
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div
-                              style={{
-                                fontFamily: ft.mono,
-                                fontSize: 8,
-                                color: "rgba(255,255,255,.2)",
-                                textTransform: "uppercase",
-                              }}
-                            >
-                              Cost/1K
-                            </div>
-                            <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
-                              ${signal.vol > 0 ? (monthlyEst / (signal.vol / 1000)).toFixed(2) : "—"}
-                            </div>
-                          </div>
+                          Weekly Budget (USD)
                         </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {matchingAgents.length === 1 && (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              flex: 1,
-                              padding: "8px 10px",
-                              background: "rgba(66,165,245,.03)",
-                              borderRadius: 8,
-                              border: "1px solid rgba(66,165,245,.08)",
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 7,
-                                background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                fontFamily: ft.display,
-                                fontSize: 11,
-                                fontWeight: 700,
-                                flexShrink: 0,
-                              }}
-                            >
-                              {matchingAgents[0].name?.charAt(0)}
-                            </div>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 11, fontWeight: 700 }}>{matchingAgents[0].name}</div>
-                              <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
-                                Rep {matchingAgents[0].stats?.reputation || 0}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (budgetNum > 0) {
-                            setGoingLive(true);
-                            if (matchingAgents.length === 1) setSelectedAgent(matchingAgents[0]);
-                            setTimeout(() => {
-                              setBudgetSaved(true);
-                              setGoingLive(false);
-                              setBudgetMode(null);
-                            }, 1200);
-                          }
-                        }}
-                        disabled={budgetNum <= 0}
-                        style={{
-                          width: "100%",
-                          fontFamily: ft.display,
-                          fontSize: 15,
-                          fontWeight: 700,
-                          color: "#fff",
-                          background:
-                            budgetNum > 0
-                              ? goingLive
-                                ? "rgba(66,165,245,.15)"
-                                : `linear-gradient(135deg, ${blueDeep}, ${blue})`
-                              : "rgba(255,255,255,.04)",
-                          border: "none",
-                          padding: "12px 0",
-                          borderRadius: 10,
-                          cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
-                          opacity: budgetNum > 0 ? 1 : 0.4,
-                          transition: "all .3s",
-                          marginTop: 10,
-                        }}
-                      >
-                        {goingLive
-                          ? "Activating..."
-                          : matchingAgents.length === 1
-                            ? `Go Live with ${matchingAgents[0].name} →`
-                            : "Go Live →"}
-                      </button>
-                    </div>
-                  ) : (
-                    /* ─── BUDGET SAVED — AGENT SELECTION (multi-agent from single budget) ─── */
-                    <div>
-                      <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
-                        <div
-                          style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 10,
-                            background: "rgba(102,187,106,.1)",
-                            border: "1px solid rgba(102,187,106,.2)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 18,
-                            margin: "0 auto 8px",
-                          }}
-                        >
-                          ✓
-                        </div>
-                        <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#66BB6A" }}>
-                          Budget Active
-                        </div>
-                        <div
-                          style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 2 }}
-                        >
-                          ${budgetNum.toLocaleString()}/week{selectedAgent ? ` · ${selectedAgent.name}` : ""}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setBudgetSaved(false);
-                          setSelectedAgent(null);
-                        }}
-                        style={{
-                          width: "100%",
-                          fontFamily: ft.mono,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: "rgba(255,255,255,.3)",
-                          background: "rgba(255,255,255,.02)",
-                          border: "1px solid rgba(255,255,255,.04)",
-                          padding: "8px 0",
-                          borderRadius: 8,
-                          cursor: "pointer",
-                        }}
-                      >
-                        Edit Budget
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* ─── MANY AGENTS — MULTI-AGENT BUDGET ALLOCATION ─── */
-                <div>
-                  <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-                    {matchingAgents.map((agent) => {
-                      const val = agentBudgets[agent.id] || "";
-                      return (
-                        <div
-                          key={agent.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "8px 10px",
-                            background: "rgba(255,255,255,.015)",
-                            borderRadius: 8,
-                            border: "1px solid rgba(255,255,255,.03)",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 7,
-                              background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontFamily: ft.display,
-                              fontSize: 11,
-                              fontWeight: 700,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {agent.name?.charAt(0)}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {agent.name}
-                            </div>
-                            <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
-                              Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
-                            </div>
-                          </div>
-                          <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                          <div style={{ flex: 1, position: "relative" }}>
                             <span
                               style={{
                                 position: "absolute",
-                                left: 8,
+                                left: 14,
                                 top: "50%",
                                 transform: "translateY(-50%)",
-                                fontFamily: ft.mono,
-                                fontSize: 11,
-                                fontWeight: 600,
+                                fontFamily: ft.display,
+                                fontSize: 18,
+                                fontWeight: 700,
                                 color: "rgba(255,255,255,.15)",
                               }}
                             >
                               $
                             </span>
                             <input
-                              value={val}
-                              onChange={(e) => updateAgentBudgetAmt(agent.id, e.target.value.replace(/[^0-9]/g, ""))}
-                              placeholder="0"
+                              value={weeklyBudget}
+                              onChange={(e) => setWeeklyBudget(e.target.value.replace(/[^0-9]/g, ""))}
+                              placeholder="500"
+                              autoFocus
                               style={{
                                 width: "100%",
-                                fontFamily: ft.mono,
-                                fontSize: 12,
-                                fontWeight: 600,
+                                fontFamily: ft.display,
+                                fontSize: 22,
+                                fontWeight: 700,
                                 background: "rgba(0,0,0,.25)",
-                                border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
-                                borderRadius: 6,
-                                padding: "6px 8px 6px 20px",
+                                border: "1px solid rgba(66,165,245,.12)",
+                                borderRadius: 10,
+                                padding: "12px 14px 12px 32px",
                                 color: "#E3F2FD",
                                 outline: "none",
-                                textAlign: "right",
                               }}
                             />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                  {totalAllocated > 0 && (
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "8px 10px",
-                        background: "rgba(66,165,245,.03)",
-                        borderRadius: 6,
-                        border: "1px solid rgba(66,165,245,.08)",
-                        marginBottom: 10,
-                      }}
-                    >
-                      <span
+                        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                          {[250, 500, 1000, 2000, 5000].map((v) => (
+                            <button
+                              key={v}
+                              onClick={() => setWeeklyBudget(String(v))}
+                              style={{
+                                fontFamily: ft.mono,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: weeklyBudget === String(v) ? blue : "rgba(255,255,255,.25)",
+                                background:
+                                  weeklyBudget === String(v) ? "rgba(66,165,245,.08)" : "rgba(255,255,255,.02)",
+                                border: `1px solid ${weeklyBudget === String(v) ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.04)"}`,
+                                padding: "5px 10px",
+                                borderRadius: 6,
+                                cursor: "pointer",
+                              }}
+                            >
+                              ${v.toLocaleString()}
+                            </button>
+                          ))}
+                        </div>
+                        {budgetNum > 0 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              padding: "8px 12px",
+                              background: "rgba(255,255,255,.015)",
+                              borderRadius: 8,
+                              marginBottom: 10,
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{
+                                  fontFamily: ft.mono,
+                                  fontSize: 8,
+                                  color: "rgba(255,255,255,.2)",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                Monthly
+                              </div>
+                              <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#E3F2FD" }}>
+                                ${monthlyEst.toLocaleString()}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div
+                                style={{
+                                  fontFamily: ft.mono,
+                                  fontSize: 8,
+                                  color: "rgba(255,255,255,.2)",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                Cost/1K
+                              </div>
+                              <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: blue }}>
+                                ${signal.vol > 0 ? (monthlyEst / (signal.vol / 1000)).toFixed(2) : "—"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {matchingAgents.length === 1 && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                flex: 1,
+                                padding: "8px 10px",
+                                background: "rgba(66,165,245,.03)",
+                                borderRadius: 8,
+                                border: "1px solid rgba(66,165,245,.08)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 7,
+                                  background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontFamily: ft.display,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {matchingAgents[0].name?.charAt(0)}
+                              </div>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 11, fontWeight: 700 }}>{matchingAgents[0].name}</div>
+                                <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                                  Rep {matchingAgents[0].stats?.reputation || 0}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (budgetNum > 0) {
+                              setGoingLive(true);
+                              if (matchingAgents.length === 1) setSelectedAgent(matchingAgents[0]);
+                              setTimeout(() => {
+                                setBudgetSaved(true);
+                                setGoingLive(false);
+                                setBudgetMode(null);
+                              }, 1200);
+                            }
+                          }}
+                          disabled={budgetNum <= 0}
+                          style={{
+                            width: "100%",
+                            fontFamily: ft.display,
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: "#fff",
+                            background:
+                              budgetNum > 0
+                                ? goingLive
+                                  ? "rgba(66,165,245,.15)"
+                                  : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                                : "rgba(255,255,255,.04)",
+                            border: "none",
+                            padding: "12px 0",
+                            borderRadius: 10,
+                            cursor: budgetNum > 0 && !goingLive ? "pointer" : "not-allowed",
+                            opacity: budgetNum > 0 ? 1 : 0.4,
+                            transition: "all .3s",
+                            marginTop: 10,
+                          }}
+                        >
+                          {goingLive
+                            ? "Activating..."
+                            : matchingAgents.length === 1
+                              ? `Go Live with ${matchingAgents[0].name} →`
+                              : "Go Live →"}
+                        </button>
+                      </div>
+                    ) : (
+                      /* ─── BUDGET SAVED — AGENT SELECTION (multi-agent from single budget) ─── */
+                      <div>
+                        <div style={{ textAlign: "center", padding: "8px 0 12px" }}>
+                          <div
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: 10,
+                              background: "rgba(102,187,106,.1)",
+                              border: "1px solid rgba(102,187,106,.2)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 18,
+                              margin: "0 auto 8px",
+                            }}
+                          >
+                            ✓
+                          </div>
+                          <div style={{ fontFamily: ft.display, fontSize: 16, fontWeight: 700, color: "#66BB6A" }}>
+                            Budget Active
+                          </div>
+                          <div
+                            style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.25)", marginTop: 2 }}
+                          >
+                            ${budgetNum.toLocaleString()}/week{selectedAgent ? ` · ${selectedAgent.name}` : ""}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setBudgetSaved(false);
+                            setSelectedAgent(null);
+                          }}
+                          style={{
+                            width: "100%",
+                            fontFamily: ft.mono,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "rgba(255,255,255,.3)",
+                            background: "rgba(255,255,255,.02)",
+                            border: "1px solid rgba(255,255,255,.04)",
+                            padding: "8px 0",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                          }}
+                        >
+                          Edit Budget
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  /* ─── MANY AGENTS — BUDGET ALLOCATION (budgeted + add new) ─── */
+                  <div>
+                    <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                      {matchingAgents
+                        .filter((agent) => agent.id in agentBudgets)
+                        .map((agent) => {
+                          const val = agentBudgets[agent.id] || "";
+                          return (
+                            <div
+                              key={agent.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                                padding: "8px 10px",
+                                background: "rgba(255,255,255,.015)",
+                                borderRadius: 8,
+                                border: "1px solid rgba(255,255,255,.03)",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 7,
+                                  background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontFamily: ft.display,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {agent.name?.charAt(0)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {agent.name}
+                                </div>
+                                <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                                  Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                                </div>
+                              </div>
+                              <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                                <span
+                                  style={{
+                                    position: "absolute",
+                                    left: 8,
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    fontFamily: ft.mono,
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    color: "rgba(255,255,255,.15)",
+                                  }}
+                                >
+                                  $
+                                </span>
+                                <input
+                                  value={val}
+                                  onChange={(e) =>
+                                    updateAgentBudgetAmt(agent.id, e.target.value.replace(/[^0-9]/g, ""))
+                                  }
+                                  placeholder="0"
+                                  style={{
+                                    width: "100%",
+                                    fontFamily: ft.mono,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    background: "rgba(0,0,0,.25)",
+                                    border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
+                                    borderRadius: 6,
+                                    padding: "6px 8px 6px 20px",
+                                    color: "#E3F2FD",
+                                    outline: "none",
+                                    textAlign: "right",
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {/* Add New Agent button */}
+                      {(() => {
+                        const budgetedIds = new Set(
+                          Object.keys(agentBudgets).filter((id) => parseFloat(agentBudgets[id]) > 0),
+                        );
+                        const unbudgeted = matchingAgents.filter((a) => !budgetedIds.has(a.id));
+                        if (unbudgeted.length === 0) return null;
+                        return (
+                          <div style={{ position: "relative" }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const menu = e.currentTarget.nextElementSibling;
+                                menu.style.display = menu.style.display === "block" ? "none" : "block";
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                                width: "100%",
+                                padding: "8px 10px",
+                                background: "rgba(66,165,245,.03)",
+                                borderRadius: 8,
+                                border: "1px dashed rgba(66,165,245,.15)",
+                                cursor: "pointer",
+                                fontFamily: ft.mono,
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: blue,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 7,
+                                  background: "rgba(66,165,245,.08)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 16,
+                                  color: blue,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                +
+                              </div>
+                              Add New Agent
+                            </button>
+                            <div
+                              style={{
+                                display: "none",
+                                position: "absolute",
+                                bottom: "100%",
+                                left: 0,
+                                right: 0,
+                                zIndex: 10,
+                                marginBottom: 4,
+                                background: "rgba(10,15,26,.98)",
+                                border: "1px solid rgba(66,165,245,.12)",
+                                borderRadius: 10,
+                                padding: 6,
+                                maxHeight: 200,
+                                overflowY: "auto",
+                              }}
+                            >
+                              {unbudgeted.map((agent) => (
+                                <button
+                                  key={agent.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateAgentBudgetAmt(agent.id, "0");
+                                    e.currentTarget.parentElement.style.display = "none";
+                                  }}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    width: "100%",
+                                    padding: "6px 8px",
+                                    background: "transparent",
+                                    border: "none",
+                                    borderRadius: 6,
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = "rgba(66,165,245,.06)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = "transparent";
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      width: 24,
+                                      height: 24,
+                                      borderRadius: 6,
+                                      background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontFamily: ft.display,
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      flexShrink: 0,
+                                    }}
+                                  >
+                                    {agent.name?.charAt(0)}
+                                  </div>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>{agent.name}</div>
+                                    <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                                      Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {totalAllocated > 0 && (
+                      <div
                         style={{
-                          fontFamily: ft.mono,
-                          fontSize: 9,
-                          color: "rgba(255,255,255,.25)",
-                          textTransform: "uppercase",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "8px 10px",
+                          background: "rgba(66,165,245,.03)",
+                          borderRadius: 6,
+                          border: "1px solid rgba(66,165,245,.08)",
+                          marginBottom: 10,
                         }}
                       >
-                        Total · ${totalAllocated.toLocaleString()}/wk
-                      </span>
-                      <span style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, color: blue }}>
-                        ${multiMonthlyEst.toLocaleString()}/mo
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => {
-                      if (totalAllocated > 0) {
-                        setGoingLive(true);
-                        setTimeout(() => {
-                          setBudgetSaved(true);
-                          setGoingLive(false);
-                          setBudgetMode(null);
-                        }, 1200);
-                      }
-                    }}
-                    disabled={totalAllocated <= 0}
-                    style={{
-                      width: "100%",
-                      fontFamily: ft.display,
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: "#fff",
-                      background:
-                        totalAllocated > 0
-                          ? goingLive
-                            ? "rgba(66,165,245,.15)"
-                            : `linear-gradient(135deg, ${blueDeep}, ${blue})`
-                          : "rgba(255,255,255,.04)",
-                      border: "none",
-                      padding: "12px 0",
-                      borderRadius: 10,
-                      cursor: totalAllocated > 0 && !goingLive ? "pointer" : "not-allowed",
-                      opacity: totalAllocated > 0 ? 1 : 0.4,
-                      transition: "all .3s",
-                    }}
-                  >
-                    {goingLive
-                      ? "Activating..."
-                      : `Allocate Budget to ${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length} Agent${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length !== 1 ? "s" : ""} →`}
-                  </button>
-                </div>
-              )}
+                        <span
+                          style={{
+                            fontFamily: ft.mono,
+                            fontSize: 9,
+                            color: "rgba(255,255,255,.25)",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Total · ${totalAllocated.toLocaleString()}/wk
+                        </span>
+                        <span style={{ fontFamily: ft.display, fontSize: 15, fontWeight: 700, color: blue }}>
+                          ${multiMonthlyEst.toLocaleString()}/mo
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (totalAllocated > 0) {
+                          setGoingLive(true);
+                          setTimeout(() => {
+                            setBudgetSaved(true);
+                            setGoingLive(false);
+                            setBudgetMode(null);
+                          }, 1200);
+                        }
+                      }}
+                      disabled={totalAllocated <= 0}
+                      style={{
+                        width: "100%",
+                        fontFamily: ft.display,
+                        fontSize: 15,
+                        fontWeight: 700,
+                        color: "#fff",
+                        background:
+                          totalAllocated > 0
+                            ? goingLive
+                              ? "rgba(66,165,245,.15)"
+                              : `linear-gradient(135deg, ${blueDeep}, ${blue})`
+                            : "rgba(255,255,255,.04)",
+                        border: "none",
+                        padding: "12px 0",
+                        borderRadius: 10,
+                        cursor: totalAllocated > 0 && !goingLive ? "pointer" : "not-allowed",
+                        opacity: totalAllocated > 0 ? 1 : 0.4,
+                        transition: "all .3s",
+                      }}
+                    >
+                      {goingLive
+                        ? "Activating..."
+                        : `Allocate Budget to ${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length} Agent${Object.values(agentBudgets).filter((v) => parseFloat(v) > 0).length !== 1 ? "s" : ""} →`}
+                    </button>
+                  </div>
+                )}
 
-              <div
-                style={{
-                  fontFamily: ft.mono,
-                  fontSize: 8,
-                  color: "rgba(255,255,255,.1)",
-                  textAlign: "center",
-                  marginTop: 8,
-                }}
-              >
-                Budget held in escrow · Agents bid competitively · SLA-enforced delivery
+                <div
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 8,
+                    color: "rgba(255,255,255,.1)",
+                    textAlign: "center",
+                    marginTop: 8,
+                  }}
+                >
+                  Budget held in escrow · Agents bid competitively · SLA-enforced delivery
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -5579,92 +6319,214 @@ function Live({ mob, tab }) {
           </div>
         </div>
         <div style={{ display: "grid", gap: 6 }}>
-          {agents.map((agent) => {
-            const val = agentBudgets[sig.id]?.[agent.id] || "";
-            return (
-              <div
-                key={agent.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 10px",
-                  background: "rgba(255,255,255,.015)",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,.03)",
-                }}
-              >
+          {agents
+            .filter((agent) => agentBudgets[sig.id] && agent.id in agentBudgets[sig.id])
+            .map((agent) => {
+              const val = agentBudgets[sig.id]?.[agent.id] || "";
+              return (
                 <div
+                  key={agent.id}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 7,
-                    background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    fontFamily: ft.display,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    flexShrink: 0,
+                    gap: 10,
+                    padding: "8px 10px",
+                    background: "rgba(255,255,255,.015)",
+                    borderRadius: 8,
+                    border: "1px solid rgba(255,255,255,.03)",
                   }}
                 >
-                  {agent.name?.charAt(0)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 7,
+                      background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontFamily: ft.display,
                       fontSize: 11,
                       fontWeight: 700,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      flexShrink: 0,
                     }}
                   >
-                    {agent.name}
+                    {agent.name?.charAt(0)}
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
-                    Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {agent.name}
+                    </div>
+                    <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                      Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                    </div>
+                  </div>
+                  <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 8,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontFamily: ft.mono,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "rgba(255,255,255,.15)",
+                      }}
+                    >
+                      $
+                    </span>
+                    <input
+                      value={val}
+                      onChange={(e) => updateAgentBudget(sig.id, agent.id, e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="0"
+                      style={{
+                        width: "100%",
+                        fontFamily: ft.mono,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: "rgba(0,0,0,.25)",
+                        border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
+                        borderRadius: 6,
+                        padding: "6px 8px 6px 20px",
+                        color: "#E3F2FD",
+                        outline: "none",
+                        textAlign: "right",
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   </div>
                 </div>
-                <div style={{ position: "relative", width: 80, flexShrink: 0 }}>
-                  <span
+              );
+            })}
+          {/* Add New Agent */}
+          {(() => {
+            const budgetedIds = new Set(Object.keys(agentBudgets[sig.id] || {}));
+            const unbudgeted = agents.filter((a) => !budgetedIds.has(a.id));
+            if (unbudgeted.length === 0) return null;
+            return (
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const menu = e.currentTarget.nextElementSibling;
+                    menu.style.display = menu.style.display === "block" ? "none" : "block";
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "8px 10px",
+                    background: "rgba(66,165,245,.03)",
+                    borderRadius: 8,
+                    border: "1px dashed rgba(66,165,245,.15)",
+                    cursor: "pointer",
+                    fontFamily: ft.mono,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: blue,
+                  }}
+                >
+                  <div
                     style={{
-                      position: "absolute",
-                      left: 8,
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      fontFamily: ft.mono,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: "rgba(255,255,255,.15)",
+                      width: 28,
+                      height: 28,
+                      borderRadius: 7,
+                      background: "rgba(66,165,245,.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 16,
+                      color: blue,
+                      flexShrink: 0,
                     }}
                   >
-                    $
-                  </span>
-                  <input
-                    value={val}
-                    onChange={(e) => updateAgentBudget(sig.id, agent.id, e.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="0"
-                    style={{
-                      width: "100%",
-                      fontFamily: ft.mono,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      background: "rgba(0,0,0,.25)",
-                      border: `1px solid ${val ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.06)"}`,
-                      borderRadius: 6,
-                      padding: "6px 8px 6px 20px",
-                      color: "#E3F2FD",
-                      outline: "none",
-                      textAlign: "right",
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                    +
+                  </div>
+                  Add New Agent
+                </button>
+                <div
+                  style={{
+                    display: "none",
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    marginTop: 4,
+                    background: "rgba(10,15,26,.98)",
+                    border: "1px solid rgba(66,165,245,.12)",
+                    borderRadius: 10,
+                    padding: 6,
+                    maxHeight: 200,
+                    overflowY: "auto",
+                  }}
+                >
+                  {unbudgeted.map((agent) => (
+                    <button
+                      key={agent.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateAgentBudget(sig.id, agent.id, "0");
+                        e.currentTarget.parentElement.style.display = "none";
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        width: "100%",
+                        padding: "6px 8px",
+                        background: "transparent",
+                        border: "none",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(66,165,245,.06)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 6,
+                          background: `linear-gradient(135deg, ${blueDeep}, ${blue})`,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontFamily: ft.display,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {agent.name?.charAt(0)}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>{agent.name}</div>
+                        <div style={{ fontFamily: ft.mono, fontSize: 8, color: "rgba(255,255,255,.2)" }}>
+                          Rep {agent.stats?.reputation || 0} · {agent.stats?.successRate}%
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
         {totalAllocated > 0 && (
           <div
