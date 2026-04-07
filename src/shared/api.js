@@ -140,6 +140,119 @@ export async function fetchStatusCfg() {
   return fetchJson("/config/status-cfg");
 }
 
+// ─── CAPABILITIES (Memory Plane) ───
+
+export async function fetchCapabilities(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.providerType) params.set("providerType", filters.providerType);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.agentId) params.set("agentId", filters.agentId);
+  const qs = params.toString();
+  return fetchJson(`/capabilities${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchCapability(id) {
+  return fetchJson(`/capabilities/${id}`);
+}
+
+export async function createCapability(data) {
+  return postJson("/capabilities", data);
+}
+
+export async function transitionCapability(id, status) {
+  return postJson(`/capabilities/${id}/transition`, { status });
+}
+
+export async function ingestAgentAsCapability(agentId) {
+  return postJson(`/capabilities/ingest-agent/${agentId}`, {});
+}
+
+// ─── CAPABILITY VERSIONS ───
+
+export async function createCapabilityVersion(data) {
+  return postJson("/capability-versions", data);
+}
+
+export async function fetchVersionLineage(capabilityId) {
+  return fetchJson(`/capabilities/${capabilityId}/versions`);
+}
+
+export async function promoteCapabilityVersion(versionId, capabilityId) {
+  return postJson(`/capability-versions/${versionId}/promote`, { capabilityId });
+}
+
+export async function rollbackCapabilityVersion(versionId, capabilityId, toVersionId) {
+  return postJson(`/capability-versions/${versionId}/rollback`, { capabilityId, toVersionId });
+}
+
+export async function compareCapabilityVersions(fromVersionId, toVersionId) {
+  return postJson("/capability-versions/compare", { fromVersionId, toVersionId });
+}
+
+// ─── EXECUTION INTENTS (Intelligence Plane) ───
+
+export async function createExecutionIntent(data) {
+  return postJson("/execution-intents", data);
+}
+
+export async function fetchExecutionIntents() {
+  return fetchJson("/execution-intents");
+}
+
+export async function fetchExecutionIntent(id) {
+  return fetchJson(`/execution-intents/${id}`);
+}
+
+// ─── QUOTE ───
+
+export async function previewQuoteApi(capabilityId, intent = {}) {
+  return postJson("/quote/preview", { capabilityId, intent });
+}
+
+// ─── EXECUTIONS & OUTCOMES (Adaptation Plane) ───
+
+export async function createExecution(data) {
+  return postJson("/executions", data);
+}
+
+export async function fetchExecutions(capabilityId) {
+  const qs = capabilityId ? `?capabilityId=${capabilityId}` : "";
+  return fetchJson(`/executions${qs}`);
+}
+
+export async function createOutcome(data) {
+  return postJson("/outcomes", data);
+}
+
+export async function writebackOutcome(data) {
+  return postJson("/outcomes/writeback", data);
+}
+
+export async function fetchOutcomeSummary(capabilityId) {
+  return fetchJson(`/outcomes/summary/${capabilityId}`);
+}
+
+// ─── ROUTING POLICIES ───
+
+export async function fetchRoutingPolicies() {
+  return fetchJson("/routing-policies");
+}
+
+export async function createRoutingPolicy(data) {
+  return postJson("/routing-policies", data);
+}
+
+export async function updateRoutingPolicy(id, data) {
+  const res = await fetch(`${API_BASE}/routing-policies/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API PUT /routing-policies/${id}: ${res.status}`);
+  return res.json();
+}
+
 // ─── WAITLIST ───
 
 export async function submitWaitlist(data) {

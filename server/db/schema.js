@@ -13,6 +13,51 @@ import {
 
 // ─── ENUMS ───
 
+export const providerTypeEnum = pgEnum("provider_type", [
+  "internal_agent",
+  "mcp",
+  "tool",
+  "model",
+  "subnet",
+  "edge_worker",
+]);
+export const capabilityStatusEnum = pgEnum("capability_status", [
+  "draft",
+  "evaluating",
+  "live",
+  "deprecated",
+  "rolled_back",
+]);
+export const versionDeployEnum = pgEnum("version_deploy_status", [
+  "shadow",
+  "canary",
+  "promoted",
+  "demoted",
+  "rolled_back",
+]);
+export const executionIntentStatusEnum = pgEnum("execution_intent_status", [
+  "pending",
+  "routing",
+  "executing",
+  "completed",
+  "failed",
+  "escalated",
+]);
+export const routeDecisionEnum = pgEnum("route_decision", [
+  "execute",
+  "shadow",
+  "fallback",
+  "escalate",
+  "reject",
+]);
+export const outcomeVerdictEnum = pgEnum("outcome_verdict", [
+  "success",
+  "partial",
+  "failure",
+  "timeout",
+  "error",
+]);
+
 export const verticalEnum = pgEnum("vertical", ["SEO", "AIO"]);
 export const agentStatusEnum = pgEnum("agent_status", [
   "evaluation",
@@ -341,6 +386,282 @@ export const auditLog = pgTable(
     index("audit_log_created_at_idx").on(table.createdAt),
   ],
 );
+
+// ─── ESCROW ───
+
+// ─── MEMORY PLANE: CAPABILITIES ───
+
+export const capabilities = pgTable(
+  "capabilities",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    name: varchar("name", { length: 200 }).notNull(),
+    providerType: providerTypeEnum("provider_type").notNull(),
+    status: capabilityStatusEnum("status").default("draft").notNull(),
+    intentDomains: jsonb("intent_domains").notNull(), // string[] — classification, extraction, codegen, etc.
+    inputSchema: jsonb("input_schema"), // JSON Schema for inputs
+    outputSchema: jsonb("output_schema"), // JSON Schema for outputs
+    preconditions: jsonb("preconditions"), // { requires: [], env: {}, scope: [] }
+    resourceRequirements: jsonb("resource_requirements"), // { cpu, memory, gpu, network }
+    securityScope: jsonb("security_scope"), // { allowedTools: [], dataAccess: [], privacyLevel }
+    costModel: jsonb("cost_model"), // { baseCents, perTokenCents, perCallCents, model }
+    latencyProfile: jsonb("latency_profile"), // { p50Ms, p95Ms, p99Ms, timeoutMs }
+    qualityProfile: jsonb("quality_profile"), // { baselineScore, confidenceInterval, evaluatedAt }
+    failureModes: jsonb("failure_modes"), // [{ mode, frequency, impact, mitigated }]
+    dependencies: jsonb("dependencies"), // string[] — other capability IDs
+    embedding: jsonb("embedding"), // number[] — semantic embedding vector
+    binaryCode: text("binary_code"), // compressed binary representation for fast retrieval
+    observedMetrics: jsonb("observed_metrics"), // { successRate, avgLatencyMs, avgCostCents, totalRuns }
+    agentId: varchar("agent_id", { length: 16 }).references(() => agents.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("capabilities_provider_type_idx").on(table.providerType),
+    index("capabilities_status_idx").on(table.status),
+  ],
+);
+
+export const capabilityVersions = pgTable(
+  "capability_versions",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    capabilityId: varchar("capability_id", { length: 32 })
+      .notNull()
+      .references(() => capabilities.id, { onDelete: "cascade" }),
+    versionTag: varchar("version_tag", { length: 40 }).notNull(), // semver or hash
+    deployStatus: versionDeployEnum("deploy_status").default("shadow").notNull(),
+    changelog: text("changelog"),
+    inputSchema: jsonb("input_schema"),
+    outputSchema: jsonb("output_schema"),
+    costModel: jsonb("cost_model"),
+    latencyProfile: jsonb("latency_profile"),
+    qualityProfile: jsonb("quality_profile"),
+    configSnapshot: jsonb("config_snapshot"), // frozen config at deploy time
+    promotedAt: timestamp("promoted_at", { withTimezone: true }),
+    demotedAt: timestamp("demoted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("cap_versions_capability_idx").on(table.capabilityId),
+    index("cap_versions_deploy_status_idx").on(table.deployStatus),
+  ],
+);
+
+export const capabilityMetrics = pgTable(
+  "capability_metrics",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    capabilityId: varchar("capability_id", { length: 32 })
+      .notNull()
+      .references(() => capabilities.id, { onDelete: "cascade" }),
+    versionId: varchar("version_id", { length: 32 }).references(() => capabilityVersions.id),
+    domain: varchar("domain", { length: 100 }),
+    environment: varchar("environment", { length: 60 }),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    windowEnd: timestamp("window_end", { withTimezone: true }).notNull(),
+    totalRuns: integer("total_runs").default(0).notNull(),
+    successCount: integer("success_count").default(0).notNull(),
+    failureCount: integer("failure_count").default(0).notNull(),
+    avgLatencyMs: real("avg_latency_ms"),
+    p50LatencyMs: real("p50_latency_ms"),
+    p95LatencyMs: real("p95_latency_ms"),
+    p99LatencyMs: real("p99_latency_ms"),
+    avgCostCents: real("avg_cost_cents"),
+    avgQualityScore: real("avg_quality_score"),
+    failureModeBreakdown: jsonb("failure_mode_breakdown"), // { [mode]: count }
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("cap_metrics_capability_idx").on(table.capabilityId),
+    index("cap_metrics_window_idx").on(table.windowStart, table.windowEnd),
+  ],
+);
+
+// ─── INTELLIGENCE PLANE: INTENTS & ROUTING ───
+
+export const executionIntents = pgTable(
+  "execution_intents",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    parentIntentId: varchar("parent_intent_id", { length: 32 }),
+    goal: text("goal").notNull(),
+    domain: varchar("domain", { length: 100 }),
+    constraints: jsonb("constraints"), // { qualityMin, latencyMaxMs, budgetMaxCents, privacyLevel }
+    qualityThreshold: real("quality_threshold"),
+    latencyBoundMs: integer("latency_bound_ms"),
+    budgetBoundCents: integer("budget_bound_cents"),
+    privacyLevel: varchar("privacy_level", { length: 30 }),
+    environment: varchar("environment", { length: 60 }),
+    requiredScope: jsonb("required_scope"), // string[]
+    inputFeatures: jsonb("input_features"), // extracted features from the goal
+    status: executionIntentStatusEnum("status").default("pending").notNull(),
+    selectedRouteId: varchar("selected_route_id", { length: 32 }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    sourceIntentId: varchar("source_intent_id", { length: 16 }), // link to marketplace intent
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("exec_intents_status_idx").on(table.status),
+    index("exec_intents_domain_idx").on(table.domain),
+  ],
+);
+
+export const intentCandidates = pgTable(
+  "intent_candidates",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    intentId: varchar("intent_id", { length: 32 })
+      .notNull()
+      .references(() => executionIntents.id, { onDelete: "cascade" }),
+    capabilityId: varchar("capability_id", { length: 32 })
+      .notNull()
+      .references(() => capabilities.id, { onDelete: "cascade" }),
+    versionId: varchar("version_id", { length: 32 }),
+    retrievalStage: varchar("retrieval_stage", { length: 30 }).notNull(), // binary | rerank | policy
+    retrievalRank: integer("retrieval_rank"),
+    semanticScore: real("semantic_score"),
+    // Quote estimates
+    quotedCostCents: integer("quoted_cost_cents"),
+    quotedLatencyMs: integer("quoted_latency_ms"),
+    quotedQuality: real("quoted_quality"),
+    quotedFailureRisk: real("quoted_failure_risk"),
+    quotedPolicyRisk: real("quoted_policy_risk"),
+    quotedRepairCost: integer("quoted_repair_cost"),
+    // Composite score
+    routeScore: real("route_score"),
+    decision: routeDecisionEnum("decision"),
+    policyViolations: jsonb("policy_violations"), // string[]
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("intent_candidates_intent_idx").on(table.intentId),
+    index("intent_candidates_capability_idx").on(table.capabilityId),
+  ],
+);
+
+// ─── EXECUTION PLANE ───
+
+export const executions = pgTable(
+  "executions",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    intentId: varchar("intent_id", { length: 32 })
+      .notNull()
+      .references(() => executionIntents.id),
+    capabilityId: varchar("capability_id", { length: 32 })
+      .notNull()
+      .references(() => capabilities.id),
+    versionId: varchar("version_id", { length: 32 }),
+    routeDecision: routeDecisionEnum("route_decision").notNull(),
+    // Execution trace
+    inputPayload: jsonb("input_payload"),
+    outputPayload: jsonb("output_payload"),
+    traceLog: jsonb("trace_log"), // [{ step, timestamp, action, result }]
+    // Observed metrics
+    actualCostCents: integer("actual_cost_cents"),
+    actualLatencyMs: integer("actual_latency_ms"),
+    tokensUsed: integer("tokens_used"),
+    // Status
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    error: text("error"),
+    fallbackTriggered: boolean("fallback_triggered").default(false).notNull(),
+    repairRequired: boolean("repair_required").default(false).notNull(),
+    environmentMeta: jsonb("environment_meta"), // { region, runtime, resourcesUsed }
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("executions_intent_idx").on(table.intentId),
+    index("executions_capability_idx").on(table.capabilityId),
+  ],
+);
+
+// ─── ADAPTATION PLANE: OUTCOMES ───
+
+export const outcomes = pgTable(
+  "outcomes",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    executionId: varchar("execution_id", { length: 32 })
+      .notNull()
+      .references(() => executions.id, { onDelete: "cascade" }),
+    capabilityId: varchar("capability_id", { length: 32 })
+      .notNull()
+      .references(() => capabilities.id),
+    versionId: varchar("version_id", { length: 32 }),
+    intentId: varchar("intent_id", { length: 32 }),
+    verdict: outcomeVerdictEnum("verdict").notNull(),
+    qualityScore: real("quality_score"),
+    humanApproval: boolean("human_approval"),
+    humanFeedback: text("human_feedback"),
+    costDeltaCents: integer("cost_delta_cents"), // actual - quoted
+    latencyDeltaMs: integer("latency_delta_ms"), // actual - quoted
+    qualityDelta: real("quality_delta"), // actual - predicted
+    fallbackUsed: boolean("fallback_used").default(false).notNull(),
+    repairTriggered: boolean("repair_triggered").default(false).notNull(),
+    dependencyChain: jsonb("dependency_chain"), // [capabilityId, ...]
+    environmentMeta: jsonb("environment_meta"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("outcomes_execution_idx").on(table.executionId),
+    index("outcomes_capability_idx").on(table.capabilityId),
+    index("outcomes_verdict_idx").on(table.verdict),
+  ],
+);
+
+// ─── ADAPTATION PLANE: VERSION EDGES ───
+
+export const versionEdges = pgTable(
+  "version_edges",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    fromVersionId: varchar("from_version_id", { length: 32 })
+      .notNull()
+      .references(() => capabilityVersions.id, { onDelete: "cascade" }),
+    toVersionId: varchar("to_version_id", { length: 32 })
+      .notNull()
+      .references(() => capabilityVersions.id, { onDelete: "cascade" }),
+    // Deltas
+    costDelta: real("cost_delta"),
+    latencyDelta: real("latency_delta"),
+    qualityDelta: real("quality_delta"),
+    repairRateDelta: real("repair_rate_delta"),
+    rollbackIncidence: real("rollback_incidence"),
+    // Comparison metadata
+    sampleSize: integer("sample_size").default(0).notNull(),
+    intentFamily: varchar("intent_family", { length: 100 }),
+    comparedAt: timestamp("compared_at", { withTimezone: true }),
+    promotionRecommendation: varchar("promotion_recommendation", { length: 30 }), // promote | hold | demote | rollback
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("version_edges_from_idx").on(table.fromVersionId),
+    index("version_edges_to_idx").on(table.toVersionId),
+  ],
+);
+
+// ─── POLICY ENGINE ───
+
+export const routingPolicies = pgTable("routing_policies", {
+  id: varchar("id", { length: 32 }).primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  scope: jsonb("scope").notNull(), // { domains: [], environments: [], privacyLevels: [] }
+  rules: jsonb("rules").notNull(), // { qualityMin, latencyMaxMs, budgetCeilingCents, allowExternal, allowShadow }
+  weights: jsonb("weights").notNull(), // { quality, cost, latency, risk } — for EU scoring
+  priority: integer("priority").default(0).notNull(),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
 
 // ─── ESCROW ───
 
