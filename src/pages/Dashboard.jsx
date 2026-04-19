@@ -4724,17 +4724,71 @@ function NewAgentFlow({ mob, onClose }) {
     const isBoth = /pro|enterprise|full|dual/i.test(uri);
     const verts = isBoth ? ["SEO", "AIO"] : isAIO ? ["AIO"] : ["SEO"];
     const seoCaps = [
-      { name: "crawl_site", domain: "SEO", description: "Deep site crawl with Core Web Vitals", triggers: ["technical-seo", "crawl"], tags: ["crawl", "cwv"] },
-      { name: "audit_technical", domain: "SEO", description: "Lighthouse-driven audit with fix recommendations", triggers: ["technical-audit", "lighthouse"], tags: ["audit", "lighthouse"] },
-      { name: "optimize_onpage", domain: "SEO", description: "Title, meta, and content structure optimization", triggers: ["on-page", "meta-tags"], tags: ["onpage", "meta"] },
-      { name: "track_rankings", domain: "SEO", description: "SERP position monitoring", triggers: ["rank-tracking", "serp-monitoring"], tags: ["rankings", "serp"] },
-      { name: "build_links", domain: "SEO", description: "Outreach-based backlink acquisition", triggers: ["link-building", "backlinks"], tags: ["links", "outreach"] },
+      {
+        name: "crawl_site",
+        domain: "SEO",
+        description: "Deep site crawl with Core Web Vitals",
+        triggers: ["technical-seo", "crawl"],
+        tags: ["crawl", "cwv"],
+      },
+      {
+        name: "audit_technical",
+        domain: "SEO",
+        description: "Lighthouse-driven audit with fix recommendations",
+        triggers: ["technical-audit", "lighthouse"],
+        tags: ["audit", "lighthouse"],
+      },
+      {
+        name: "optimize_onpage",
+        domain: "SEO",
+        description: "Title, meta, and content structure optimization",
+        triggers: ["on-page", "meta-tags"],
+        tags: ["onpage", "meta"],
+      },
+      {
+        name: "track_rankings",
+        domain: "SEO",
+        description: "SERP position monitoring",
+        triggers: ["rank-tracking", "serp-monitoring"],
+        tags: ["rankings", "serp"],
+      },
+      {
+        name: "build_links",
+        domain: "SEO",
+        description: "Outreach-based backlink acquisition",
+        triggers: ["link-building", "backlinks"],
+        tags: ["links", "outreach"],
+      },
     ];
     const aioCaps = [
-      { name: "restructure_content", domain: "AIO", description: "Rewrite content for AI-friendly extraction", triggers: ["content-restructuring", "ai-optimization"], tags: ["content", "ai-friendly"] },
-      { name: "implement_schema", domain: "AIO", description: "Deploy FAQ, HowTo, and custom schema markup", triggers: ["schema-markup", "structured-data"], tags: ["schema", "jsonld"] },
-      { name: "monitor_aio", domain: "AIO", description: "Track AI Overview appearances and citation status", triggers: ["aio-monitoring", "citation-tracking"], tags: ["monitoring", "aio"] },
-      { name: "optimize_entities", domain: "AIO", description: "Entity resolution and knowledge graph alignment", triggers: ["entity-resolution", "knowledge-graph"], tags: ["entities", "knowledge-graph"] },
+      {
+        name: "restructure_content",
+        domain: "AIO",
+        description: "Rewrite content for AI-friendly extraction",
+        triggers: ["content-restructuring", "ai-optimization"],
+        tags: ["content", "ai-friendly"],
+      },
+      {
+        name: "implement_schema",
+        domain: "AIO",
+        description: "Deploy FAQ, HowTo, and custom schema markup",
+        triggers: ["schema-markup", "structured-data"],
+        tags: ["schema", "jsonld"],
+      },
+      {
+        name: "monitor_aio",
+        domain: "AIO",
+        description: "Track AI Overview appearances and citation status",
+        triggers: ["aio-monitoring", "citation-tracking"],
+        tags: ["monitoring", "aio"],
+      },
+      {
+        name: "optimize_entities",
+        domain: "AIO",
+        description: "Entity resolution and knowledge graph alignment",
+        triggers: ["entity-resolution", "knowledge-graph"],
+        tags: ["entities", "knowledge-graph"],
+      },
     ];
     let caps = [];
     let tls = [];
