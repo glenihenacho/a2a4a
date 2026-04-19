@@ -265,7 +265,9 @@ export async function ingestAgentAsCapability(db, schema, agentId) {
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   // Map agent capabilities to intent domains
-  const intentDomains = (agent.capabilities || []).map((c) => c.domain);
+  const intentDomains = (agent.capabilities || []).flatMap((c) =>
+    [c.domain, ...(c.triggers || [])].filter(Boolean),
+  );
 
   const capData = {
     name: agent.name,

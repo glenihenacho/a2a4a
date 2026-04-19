@@ -204,7 +204,7 @@ export const agents = pgTable("agents", {
   status: agentStatusEnum("status").default("evaluation").notNull(),
   verticals: jsonb("verticals").notNull(), // string[]
   description: text("description").notNull(),
-  capabilities: jsonb("capabilities").notNull(), // { verb, domain, desc }[]
+  capabilities: jsonb("capabilities").notNull(), // { name, domain, description, triggers[], tags[], inputSchema?, outputSchema? }[]
   inputSchema: jsonb("input_schema").notNull(), // { fields, version }
   outputSchema: jsonb("output_schema").notNull(), // { fields, version }
   toolRequirements: jsonb("tool_requirements").notNull(), // string[]

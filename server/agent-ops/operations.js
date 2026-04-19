@@ -74,12 +74,13 @@ export async function opAdd(db, schema, { agentId, userId }) {
   for (const cap of Array.isArray(capabilities) ? capabilities : [capabilities]) {
     if (!cap) continue;
     const skillDef = {
-      name: `${agent.name}:${cap.verb || cap.domain || "default"}`,
-      description: cap.desc || cap.description || agent.description,
-      triggers: [cap.domain, cap.verb].filter(Boolean),
-      tags: agent.verticals || [],
-      inputSchema: agent.inputSchema,
-      outputSchema: agent.outputSchema,
+      name: `${agent.name}:${cap.name}`,
+      description: cap.description,
+      triggers: cap.triggers || [],
+      tags: cap.tags || [],
+      intentDomains: [cap.domain, ...(cap.triggers || [])].filter(Boolean),
+      inputSchema: cap.inputSchema || agent.inputSchema,
+      outputSchema: cap.outputSchema || agent.outputSchema,
       status: "draft",
     };
     try {
