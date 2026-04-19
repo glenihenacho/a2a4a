@@ -185,8 +185,8 @@ export async function rollbackCapabilityVersion(versionId, capabilityId, toVersi
   return postJson(`/capability-versions/${versionId}/rollback`, { capabilityId, toVersionId });
 }
 
-export async function compareCapabilityVersions(fromVersionId, toVersionId) {
-  return postJson("/capability-versions/compare", { fromVersionId, toVersionId });
+export async function compareCapabilityVersions(fromVersionId, toVersionId, filters = {}) {
+  return postJson("/capability-versions/compare", { fromVersionId, toVersionId, ...filters });
 }
 
 // ─── EXECUTION INTENTS (Intelligence Plane) ───
@@ -201,6 +201,26 @@ export async function fetchExecutionIntents() {
 
 export async function fetchExecutionIntent(id) {
   return fetchJson(`/execution-intents/${id}`);
+}
+
+export async function executeIntent(id, inputPayload = null) {
+  return postJson(`/execution-intents/${id}/execute`, { inputPayload });
+}
+
+// ─── SKILL INGESTION ───
+
+export async function ingestSkill(data) {
+  return postJson("/skills/ingest", data);
+}
+
+export async function ingestSkillBatch(skills) {
+  return postJson("/skills/ingest-batch", { skills });
+}
+
+// ─── CAPABILITY UPSERT ───
+
+export async function upsertCapability(data) {
+  return postJson("/capabilities/upsert", data);
 }
 
 // ─── QUOTE ───

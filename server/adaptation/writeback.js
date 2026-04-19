@@ -83,7 +83,6 @@ export async function recordOutcome(db, schema, data) {
  * Computes averages over the last 100 outcomes.
  */
 export async function updateRollingMetrics(db, schema, capabilityId) {
-  // Fetch recent outcomes
   const recentOutcomes = await db
     .select()
     .from(schema.outcomes)
@@ -97,13 +96,11 @@ export async function updateRollingMetrics(db, schema, capabilityId) {
   const successes = recentOutcomes.filter((o) => o.verdict === "success").length;
   const successRate = (successes / total) * 100;
 
-  // Average quality
   const withQuality = recentOutcomes.filter((o) => o.qualityScore != null);
   const avgQuality = withQuality.length > 0
     ? withQuality.reduce((sum, o) => sum + o.qualityScore, 0) / withQuality.length
     : null;
 
-  // Get latency/cost from executions
   const recentExecs = await db
     .select()
     .from(schema.executions)
@@ -121,7 +118,107 @@ export async function updateRollingMetrics(db, schema, capabilityId) {
     ? withCost.reduce((sum, e) => sum + e.actualCostCents, 0) / withCost.length
     : 0;
 
-  // Write back to capability
+  // Trust score: consistency (low variance in success) + repair rate
+  const repairs = recentOutcomes.filter((o) => o.repairTriggered).length;
+  const repairRate = total > 0 ? repairs / total : 0;
+  const windows = splitIntoWindows(recentOutcomes, 10);
+  const windowRates = windows.map((w) => {
+    const s = w.filter((o) => o.verdict === "success").length;
+    return w.length > 0 ? s / w.length : 0;
+  });
+  const consistencyScore = windowRates.length > 1
+    ? 1 - Math.min(1, standardDeviation(windowRates) * 2)
+    : 0.5;
+  const trustScore = Math.round((0.6 * consistencyScore + 0.4 * (1 - repairRate)) * 100) / 100;
+
+  // Per-domain calibration
+  const domainCalibration = {};
+  const outcomesWithIntents = await db
+    .select({
+      verdict: schema.outcomes.verdict,
+      qualityScore: schema.outcomes.qualityScore,
+      costDeltaCents: schema.outcomes.costDeltaCents,
+      latencyDeltaMs: schema.outcomes.latencyDeltaMs,
+      domain: schema.executionIntents.domain,
+    })
+    .from(schema.outcomes)
+    .innerJoin(schema.executions, eq(schema.outcomes.executionId, schema.executions.id))
+    .innerJoin(schema.executionIntents, eq(schema.executions.intentId, schema.executionIntents.id))
+    .where(eq(schema.outcomes.capabilityId, capabilityId))
+    .orderBy(desc(schema.outcomes.createdAt))
+    .limit(100);
+
+  const byDomain = {};
+  for (const row of outcomesWithIntents) {
+    const d = row.domain || "unknown";
+    if (!byDomain[d]) byDomain[d] = [];
+    byDomain[d].push(row);
+  }
+  for (const [domain, rows] of Object.entries(byDomain)) {
+    const dSuccesses = rows.filter((r) => r.verdict === "success").length;
+    domainCalibration[domain] = {
+      successRate: Math.round((dSuccesses / rows.length) * 1000) / 10,
+      sampleSize: rows.length,
+    };
+  }
+
+  // Version promotion confidence
+  const [cap] = await db
+    .select()
+    .from(schema.capabilities)
+    .where(eq(schema.capabilities.id, capabilityId));
+
+  let versionConfidence = null;
+  if (cap) {
+    const promotedVersions = await db
+      .select()
+      .from(schema.capabilityVersions)
+      .where(
+        and(
+          eq(schema.capabilityVersions.capabilityId, capabilityId),
+          eq(schema.capabilityVersions.deployStatus, "promoted"),
+        ),
+      )
+      .limit(1);
+
+    if (promotedVersions.length > 0) {
+      const currentVer = promotedVersions[0];
+      const verOutcomes = recentOutcomes.filter((o) => o.versionId === currentVer.id);
+      const verSuccesses = verOutcomes.filter((o) => o.verdict === "success").length;
+      const verRate = verOutcomes.length > 0 ? (verSuccesses / verOutcomes.length) * 100 : 0;
+      const trendDirection = verRate >= successRate ? "stable_or_improving" : "declining";
+      versionConfidence = {
+        currentVersion: currentVer.versionTag,
+        runsOnVersion: verOutcomes.length,
+        successRateOnVersion: Math.round(verRate * 10) / 10,
+        trendDirection,
+      };
+    }
+  }
+
+  // Route selection prior
+  const candidateRecords = await db
+    .select()
+    .from(schema.intentCandidates)
+    .where(eq(schema.intentCandidates.capabilityId, capabilityId))
+    .orderBy(desc(schema.intentCandidates.createdAt))
+    .limit(100);
+
+  const selectedCount = candidateRecords.filter((c) => c.decision === "execute").length;
+  const totalCandidateCount = candidateRecords.length;
+  const ranks = candidateRecords
+    .filter((c) => c.retrievalRank != null)
+    .map((c) => c.retrievalRank);
+  const avgRank = ranks.length > 0
+    ? Math.round((ranks.reduce((s, r) => s + r, 0) / ranks.length) * 10) / 10
+    : null;
+
+  const routePrior = {
+    selectedCount,
+    totalCandidateCount,
+    avgRank,
+  };
+
   await db
     .update(schema.capabilities)
     .set({
@@ -132,10 +229,29 @@ export async function updateRollingMetrics(db, schema, capabilityId) {
         totalRuns: total,
         avgQuality: avgQuality ? Math.round(avgQuality * 10) / 10 : null,
         lastUpdated: new Date().toISOString(),
+        trustScore,
+        domainCalibration,
+        versionConfidence,
+        routePrior,
       },
       updatedAt: new Date(),
     })
     .where(eq(schema.capabilities.id, capabilityId));
+}
+
+function splitIntoWindows(items, windowSize) {
+  const windows = [];
+  for (let i = 0; i < items.length; i += windowSize) {
+    windows.push(items.slice(i, i + windowSize));
+  }
+  return windows;
+}
+
+function standardDeviation(values) {
+  if (values.length < 2) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
 }
 
 /**

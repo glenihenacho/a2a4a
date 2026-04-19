@@ -26,6 +26,7 @@ export async function ingestCapability(db, schema, data) {
   const record = {
     id,
     name: data.name,
+    sourceKey: data.sourceKey || null,
     providerType: data.providerType,
     status: data.status || "draft",
     intentDomains: data.intentDomains || [],
@@ -49,6 +50,63 @@ export async function ingestCapability(db, schema, data) {
 
   const [inserted] = await db.insert(schema.capabilities).values(record).returning();
   return inserted;
+}
+
+/**
+ * Upsert a capability by sourceKey.
+ * If a capability with the same sourceKey exists, update it and create a new version.
+ * If not, insert a new capability.
+ */
+export async function upsertCapability(db, schema, data) {
+  if (!data.sourceKey) {
+    return ingestCapability(db, schema, data);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(schema.capabilities)
+    .where(eq(schema.capabilities.sourceKey, data.sourceKey));
+
+  if (!existing) {
+    return ingestCapability(db, schema, { ...data });
+  }
+
+  const mutableFields = {};
+  if (data.intentDomains) mutableFields.intentDomains = data.intentDomains;
+  if (data.inputSchema !== undefined) mutableFields.inputSchema = data.inputSchema;
+  if (data.outputSchema !== undefined) mutableFields.outputSchema = data.outputSchema;
+  if (data.preconditions !== undefined) mutableFields.preconditions = data.preconditions;
+  if (data.costModel !== undefined) mutableFields.costModel = data.costModel;
+  if (data.latencyProfile !== undefined) mutableFields.latencyProfile = data.latencyProfile;
+  if (data.qualityProfile !== undefined) mutableFields.qualityProfile = data.qualityProfile;
+  if (data.securityScope !== undefined) mutableFields.securityScope = data.securityScope;
+  if (data.resourceRequirements !== undefined) mutableFields.resourceRequirements = data.resourceRequirements;
+  if (data.failureModes !== undefined) mutableFields.failureModes = data.failureModes;
+  if (data.dependencies !== undefined) mutableFields.dependencies = data.dependencies;
+  if (data.embedding !== undefined) mutableFields.embedding = data.embedding;
+  if (data.name) mutableFields.name = data.name;
+
+  mutableFields.updatedAt = new Date();
+
+  const [updated] = await db
+    .update(schema.capabilities)
+    .set(mutableFields)
+    .where(eq(schema.capabilities.id, existing.id))
+    .returning();
+
+  const version = await createCapabilityVersion(db, schema, {
+    capabilityId: existing.id,
+    versionTag: `v${Date.now().toString(36)}`,
+    deployStatus: "shadow",
+    changelog: `Re-ingested from source: ${data.sourceKey}`,
+    inputSchema: data.inputSchema || existing.inputSchema,
+    outputSchema: data.outputSchema || existing.outputSchema,
+    costModel: data.costModel || existing.costModel,
+    latencyProfile: data.latencyProfile || existing.latencyProfile,
+    qualityProfile: data.qualityProfile || existing.qualityProfile,
+  });
+
+  return { ...updated, version, isUpdate: true };
 }
 
 /**

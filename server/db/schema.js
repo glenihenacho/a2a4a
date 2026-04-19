@@ -14,12 +14,8 @@ import {
 // ─── ENUMS ───
 
 export const providerTypeEnum = pgEnum("provider_type", [
+  "skill",
   "internal_agent",
-  "mcp",
-  "tool",
-  "model",
-  "subnet",
-  "edge_worker",
 ]);
 export const capabilityStatusEnum = pgEnum("capability_status", [
   "draft",
@@ -396,6 +392,7 @@ export const capabilities = pgTable(
   {
     id: varchar("id", { length: 32 }).primaryKey(),
     name: varchar("name", { length: 200 }).notNull(),
+    sourceKey: varchar("source_key", { length: 200 }).unique(),
     providerType: providerTypeEnum("provider_type").notNull(),
     status: capabilityStatusEnum("status").default("draft").notNull(),
     intentDomains: jsonb("intent_domains").notNull(), // string[] — classification, extraction, codegen, etc.

@@ -4,6 +4,7 @@
 // and policy constraints.
 
 import { eq, and } from "drizzle-orm";
+import { executeCapability } from "../execution/executor.js";
 
 /**
  * Default weights for expected utility scoring.
@@ -51,6 +52,9 @@ function mergeRules(policies) {
     budgetCeilingCents: Infinity,
     allowExternal: true,
     allowShadow: true,
+    minUtilityForExecution: 0.1,
+    shadowThresholdRuns: 10,
+    fallbackRiskThreshold: 0.3,
   };
 
   for (const p of policies) {
@@ -60,6 +64,9 @@ function mergeRules(policies) {
     if (r.budgetCeilingCents != null) merged.budgetCeilingCents = Math.min(merged.budgetCeilingCents, r.budgetCeilingCents);
     if (r.allowExternal === false) merged.allowExternal = false;
     if (r.allowShadow === false) merged.allowShadow = false;
+    if (r.minUtilityForExecution != null) merged.minUtilityForExecution = Math.max(merged.minUtilityForExecution, r.minUtilityForExecution);
+    if (r.shadowThresholdRuns != null) merged.shadowThresholdRuns = Math.max(merged.shadowThresholdRuns, r.shadowThresholdRuns);
+    if (r.fallbackRiskThreshold != null) merged.fallbackRiskThreshold = Math.min(merged.fallbackRiskThreshold, r.fallbackRiskThreshold);
   }
 
   return merged;
@@ -125,11 +132,6 @@ export function applyPolicyFilters(candidates, rules, intent) {
       violations.push(`cost ${c.quotedCostCents}¢ > budget ${budgetMax}¢`);
     }
 
-    // External provider gate
-    if (!rules.allowExternal && ["model", "subnet", "edge_worker"].includes(c.providerType)) {
-      violations.push(`external provider ${c.providerType} not allowed`);
-    }
-
     // Policy risk gate
     if (c.quotedPolicyRisk != null && c.quotedPolicyRisk > 0.5) {
       violations.push(`policy risk ${(c.quotedPolicyRisk * 100).toFixed(0)}% > 50%`);
@@ -176,12 +178,10 @@ export function computeExpectedUtility(candidate, weights, maxCost, maxLatency) 
  * Returns { selected, alternatives, rejected, policies, rules, weights }
  */
 export async function selectRoute(db, schema, candidates, intent) {
-  // Load and merge policies
   const policies = await loadPolicies(db, schema, intent);
   const rules = mergeRules(policies);
   const weights = mergeWeights(policies);
 
-  // Apply hard filters
   const { passed, rejected } = applyPolicyFilters(candidates, rules, intent);
 
   if (passed.length === 0) {
@@ -197,11 +197,9 @@ export async function selectRoute(db, schema, candidates, intent) {
     };
   }
 
-  // Compute normalization bounds
   const maxCost = Math.max(...passed.map((c) => c.quotedCostCents || 0), 1);
   const maxLatency = Math.max(...passed.map((c) => c.quotedLatencyMs || 0), 1);
 
-  // Score and sort
   const scored = passed.map((c) => ({
     ...c,
     routeScore: computeExpectedUtility(c, weights, maxCost, maxLatency),
@@ -209,11 +207,68 @@ export async function selectRoute(db, schema, candidates, intent) {
   }));
   scored.sort((a, b) => b.routeScore - a.routeScore);
 
-  const [selected, ...alternatives] = scored;
+  // Escalate: no candidate meets minimum utility threshold
+  if (scored[0].routeScore < rules.minUtilityForExecution) {
+    return {
+      selected: null,
+      alternatives: scored,
+      rejected,
+      policies,
+      rules,
+      weights,
+      decision: "escalate",
+      reason: `Best score ${scored[0].routeScore.toFixed(3)} below minimum ${rules.minUtilityForExecution}`,
+    };
+  }
+
+  const best = scored[0];
+  const rest = scored.slice(1);
+  let decision = "execute";
+  let shadowExecution = null;
+  let fallbackRoute = null;
+
+  // Shadow: best candidate has few historical runs — run it as shadow, use second-best as primary
+  const bestMetrics = best.observedMetrics || {};
+  const totalRuns = bestMetrics.totalRuns || 0;
+  if (totalRuns < rules.shadowThresholdRuns && rest.length > 0 && rules.allowShadow) {
+    decision = "shadow";
+    shadowExecution = { ...best, decision: "shadow" };
+    const primary = rest[0];
+    return {
+      selected: { ...primary, decision: "execute" },
+      shadowExecution,
+      alternatives: rest.slice(1),
+      rejected,
+      policies,
+      rules,
+      weights,
+      decision: "shadow",
+      reason: `Primary candidate has only ${totalRuns} runs (threshold: ${rules.shadowThresholdRuns}), shadowing with fallback`,
+    };
+  }
+
+  // Fallback: best candidate has high failure risk — mark fallback, use second-best if available
+  const failureRisk = best.quotedFailureRisk || 0;
+  if (failureRisk > rules.fallbackRiskThreshold && rest.length > 0) {
+    decision = "fallback";
+    fallbackRoute = { ...best, decision: "fallback" };
+    const primary = rest[0];
+    return {
+      selected: { ...primary, decision: "execute" },
+      fallbackRoute,
+      alternatives: rest.slice(1),
+      rejected,
+      policies,
+      rules,
+      weights,
+      decision: "fallback",
+      reason: `Top candidate failure risk ${(failureRisk * 100).toFixed(0)}% exceeds threshold ${(rules.fallbackRiskThreshold * 100).toFixed(0)}%`,
+    };
+  }
 
   return {
-    selected: { ...selected, decision: "execute" },
-    alternatives,
+    selected: { ...best, decision: "execute" },
+    alternatives: rest,
     rejected,
     policies,
     rules,
@@ -226,8 +281,7 @@ export async function selectRoute(db, schema, candidates, intent) {
  * Create an execution intent, run retrieval + quoting + routing,
  * and return the full decision.
  */
-export async function routeIntent(db, schema, intentData, retrieveFn, quoteFn) {
-  // Create execution intent
+export async function routeIntent(db, schema, intentData, retrieveFn, quoteFn, options = {}) {
   const intentId = `INT-${Date.now().toString(36).slice(-8)}`;
   const [intent] = await db
     .insert(schema.executionIntents)
@@ -250,16 +304,10 @@ export async function routeIntent(db, schema, intentData, retrieveFn, quoteFn) {
     })
     .returning();
 
-  // Retrieve candidates
   const candidates = await retrieveFn(db, schema, intent);
-
-  // Generate quotes
   const quoted = await quoteFn(db, schema, candidates, intent);
-
-  // Route
   const result = await selectRoute(db, schema, quoted, intent);
 
-  // Update intent status
   const newStatus = result.selected ? "executing" : "failed";
   await db
     .update(schema.executionIntents)
@@ -270,5 +318,18 @@ export async function routeIntent(db, schema, intentData, retrieveFn, quoteFn) {
     })
     .where(eq(schema.executionIntents.id, intentId));
 
-  return { intent, ...result };
+  const routeResult = { intent, ...result };
+
+  if (options.execute && result.selected) {
+    const execResult = await executeCapability(db, schema, {
+      intentId: intent.id,
+      capabilityId: result.selected.id,
+      versionId: result.selected.versionId || null,
+      routeDecision: result.selected.decision || "execute",
+      inputPayload: intentData.inputPayload || null,
+    });
+    routeResult.execution = execResult;
+  }
+
+  return routeResult;
 }

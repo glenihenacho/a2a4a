@@ -26,10 +26,13 @@ import {
   getCapabilityWithVersions,
   recordMetricsWindow,
   ingestAgentAsCapability,
+  upsertCapability,
 } from "./memory/registry.js";
+import { ingestSkill, ingestSkillBatch } from "./memory/ingest.js";
 import { retrieveCandidates, persistCandidates } from "./memory/retrieval.js";
 import { generateQuotes, previewQuote } from "./intelligence/quote.js";
 import { selectRoute, routeIntent } from "./intelligence/router.js";
+import { executeCapability, registerSkillHandler } from "./execution/executor.js";
 import { recordExecution, recordOutcome, writebackOutcome, getOutcomeSummary } from "./adaptation/writeback.js";
 import { compareVersions, recordVersionEdge, promoteVersion, rollbackVersion, getVersionLineage } from "./adaptation/versioning.js";
 import {
@@ -250,7 +253,7 @@ const waitlistSchema = z.object({
 
 const capabilitySchema = z.object({
   name: z.string().min(1).max(200),
-  providerType: z.enum(["internal_agent", "mcp", "tool", "model", "subnet", "edge_worker"]),
+  providerType: z.enum(["skill", "internal_agent"]),
   status: z.enum(["draft", "evaluating", "live", "deprecated", "rolled_back"]).optional(),
   intentDomains: z.array(z.string()),
   inputSchema: z.object({}).passthrough().nullable().optional(),
@@ -1370,7 +1373,10 @@ app.post("/api/capability-versions/compare", requireAuth, async (c) => {
   if (!body?.fromVersionId || !body?.toVersionId) {
     return c.json({ error: "Missing fromVersionId or toVersionId" }, 400);
   }
-  const comparison = await compareVersions(db, schema, body.fromVersionId, body.toVersionId);
+  const filters = {};
+  if (body.intentFamily) filters.intentFamily = body.intentFamily;
+  if (body.environment) filters.environment = body.environment;
+  const comparison = await compareVersions(db, schema, body.fromVersionId, body.toVersionId, filters);
   // Persist the edge
   await recordVersionEdge(db, schema, comparison);
   return c.json(comparison);
@@ -1385,16 +1391,15 @@ app.post("/api/execution-intents", requireAuth, async (c) => {
   const data = executionIntentSchema.parse(body);
   const user = c.get("user");
 
-  // Full pipeline: create intent → retrieve → quote → route
   const result = await routeIntent(
     db,
     schema,
     { ...data, userId: user?.id },
     retrieveCandidates,
     generateQuotes,
+    { execute: !!body.execute },
   );
 
-  // Persist candidates for audit
   const allCandidates = [
     ...(result.selected ? [result.selected] : []),
     ...(result.alternatives || []),
@@ -1404,7 +1409,7 @@ app.post("/api/execution-intents", requireAuth, async (c) => {
     await persistCandidates(db, schema, result.intent.id, allCandidates);
   }
 
-  return c.json({
+  const response = {
     intentId: result.intent.id,
     decision: result.decision,
     selected: result.selected ? {
@@ -1417,12 +1422,26 @@ app.post("/api/execution-intents", requireAuth, async (c) => {
       quotedQuality: result.selected.quotedQuality,
       quotedFailureRisk: result.selected.quotedFailureRisk,
     } : null,
+    shadowExecution: result.shadowExecution ? {
+      capabilityId: result.shadowExecution.id,
+      name: result.shadowExecution.name,
+    } : null,
+    fallbackRoute: result.fallbackRoute ? {
+      capabilityId: result.fallbackRoute.id,
+      name: result.fallbackRoute.name,
+    } : null,
     alternativeCount: result.alternatives?.length || 0,
     rejectedCount: result.rejected?.length || 0,
     reason: result.reason || null,
     rules: result.rules,
     weights: result.weights,
-  }, 201);
+  };
+
+  if (result.execution) {
+    response.execution = result.execution;
+  }
+
+  return c.json(response, 201);
 });
 
 app.get("/api/execution-intents", async (c) => {
@@ -1451,6 +1470,63 @@ app.get("/api/execution-intents/:id", async (c) => {
     .where(eq(schema.intentCandidates.intentId, intent.id));
 
   return c.json({ ...intent, candidates });
+});
+
+// ─── EXECUTION: EXECUTE ROUTED INTENT ───
+
+app.post("/api/execution-intents/:id/execute", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const intentId = c.req.param("id");
+  const body = await parseJson(c);
+
+  const [intent] = await db
+    .select()
+    .from(schema.executionIntents)
+    .where(eq(schema.executionIntents.id, intentId));
+  if (!intent) return c.json({ error: "Intent not found" }, 404);
+  if (!intent.selectedRouteId) return c.json({ error: "Intent has no selected route" }, 400);
+
+  const result = await executeCapability(db, schema, {
+    intentId: intent.id,
+    capabilityId: intent.selectedRouteId,
+    routeDecision: "execute",
+    inputPayload: body?.inputPayload || null,
+  });
+
+  return c.json(result, 201);
+});
+
+// ─── SKILL INGESTION ───
+
+app.post("/api/skills/ingest", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.name) return c.json({ error: "Skill definition must have a name" }, 400);
+
+  const result = await ingestSkill(db, schema, body);
+  return c.json(result, 201);
+});
+
+app.post("/api/skills/ingest-batch", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.skills || !Array.isArray(body.skills)) {
+    return c.json({ error: "Expected { skills: [...] }" }, 400);
+  }
+
+  const result = await ingestSkillBatch(db, schema, body.skills);
+  return c.json(result, 201);
+});
+
+// ─── CAPABILITY UPSERT ───
+
+app.post("/api/capabilities/upsert", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+  const result = await upsertCapability(db, schema, body);
+  return c.json(result, 201);
 });
 
 // ─── QUOTE PREVIEW ───

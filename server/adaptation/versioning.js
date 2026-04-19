@@ -9,22 +9,61 @@ import { eq, and, desc, inArray } from "drizzle-orm";
  * Compare two versions of a capability using observed outcomes.
  * Returns delta metrics and a promotion recommendation.
  */
-export async function compareVersions(db, schema, fromVersionId, toVersionId) {
-  // Get outcomes for each version
-  const [fromOutcomes, toOutcomes] = await Promise.all([
-    db
-      .select()
+export async function compareVersions(db, schema, fromVersionId, toVersionId, filters = {}) {
+  let fromOutcomes, toOutcomes;
+
+  if (filters.intentFamily || filters.environment) {
+    // Filtered comparison: join outcomes → executions → execution_intents
+    const allFrom = await db
+      .select({
+        outcome: schema.outcomes,
+        domain: schema.executionIntents.domain,
+        environment: schema.executionIntents.environment,
+      })
       .from(schema.outcomes)
+      .innerJoin(schema.executions, eq(schema.outcomes.executionId, schema.executions.id))
+      .innerJoin(schema.executionIntents, eq(schema.executions.intentId, schema.executionIntents.id))
       .where(eq(schema.outcomes.versionId, fromVersionId))
       .orderBy(desc(schema.outcomes.createdAt))
-      .limit(50),
-    db
-      .select()
+      .limit(100);
+
+    const allTo = await db
+      .select({
+        outcome: schema.outcomes,
+        domain: schema.executionIntents.domain,
+        environment: schema.executionIntents.environment,
+      })
       .from(schema.outcomes)
+      .innerJoin(schema.executions, eq(schema.outcomes.executionId, schema.executions.id))
+      .innerJoin(schema.executionIntents, eq(schema.executions.intentId, schema.executionIntents.id))
       .where(eq(schema.outcomes.versionId, toVersionId))
       .orderBy(desc(schema.outcomes.createdAt))
-      .limit(50),
-  ]);
+      .limit(100);
+
+    const filterFn = (row) => {
+      if (filters.intentFamily && row.domain !== filters.intentFamily) return false;
+      if (filters.environment && row.environment !== filters.environment) return false;
+      return true;
+    };
+
+    fromOutcomes = allFrom.filter(filterFn).map((r) => r.outcome).slice(0, 50);
+    toOutcomes = allTo.filter(filterFn).map((r) => r.outcome).slice(0, 50);
+  } else {
+    [fromOutcomes, toOutcomes] = await Promise.all([
+      db
+        .select()
+        .from(schema.outcomes)
+        .where(eq(schema.outcomes.versionId, fromVersionId))
+        .orderBy(desc(schema.outcomes.createdAt))
+        .limit(50),
+      db
+        .select()
+        .from(schema.outcomes)
+        .where(eq(schema.outcomes.versionId, toVersionId))
+        .orderBy(desc(schema.outcomes.createdAt))
+        .limit(50),
+    ]);
+  }
 
   if (fromOutcomes.length === 0 || toOutcomes.length === 0) {
     return {
@@ -65,6 +104,8 @@ export async function compareVersions(db, schema, fromVersionId, toVersionId) {
     recommendation: recommendation.action,
     reason: recommendation.reason,
     confidence: recommendation.confidence,
+    intentFamily: filters.intentFamily || null,
+    environment: filters.environment || null,
   };
 }
 
