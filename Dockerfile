@@ -25,6 +25,7 @@ COPY --from=build /app/dist ./dist
 # Copy server code + package.json
 COPY package.json ./
 COPY server ./server
+COPY cli/shared ./cli/shared
 COPY drizzle.config.js ./
 
 # Install drizzle-kit for schema migrations via SSH
