@@ -1,4 +1,4 @@
-import { eq, and, desc, ne } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import {
   upsertCapability,
   listCapabilities,
@@ -7,7 +7,7 @@ import {
 } from "../memory/registry.js";
 import { getOutcomeSummary } from "../adaptation/writeback.js";
 import { executeCapability } from "../execution/executor.js";
-import { compareVersions, promoteVersion } from "../adaptation/versioning.js";
+import { promoteVersion } from "../adaptation/versioning.js";
 import { createMppTransfer } from "../stripe.js";
 
 // ─── TIER GATES ───

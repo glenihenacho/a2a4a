@@ -3,7 +3,7 @@
 // policy risk, and downstream repair cost. Uses historical metrics when
 // available, falls back to capability profiles.
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 /**
  * Generate a quote for a single candidate capability against an intent.
@@ -58,7 +58,7 @@ export async function generateQuote(db, schema, capability, intent) {
           quotedCostCents = maxCostCents;
         }
       }
-    } catch {}
+    } catch { /* agent lookup optional */ }
   }
 
   // ─── Latency estimation ───
@@ -149,7 +149,7 @@ export async function generateQuotes(db, schema, candidates, intent) {
 /**
  * Preview a quote without persisting — useful for cost exploration.
  */
-export function previewQuote(capability, intent) {
+export function previewQuote(capability, _intent) {
   const metrics = capability.observedMetrics || {};
   const costModel = capability.costModel || {};
   const latencyProfile = capability.latencyProfile || {};

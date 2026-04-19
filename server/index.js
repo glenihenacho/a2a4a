@@ -24,14 +24,13 @@ import {
   transitionCapabilityStatus,
   listCapabilities,
   getCapabilityWithVersions,
-  recordMetricsWindow,
   upsertCapability,
 } from "./memory/registry.js";
 import { ingestSkill, ingestSkillBatch } from "./memory/ingest.js";
 import { retrieveCandidates, persistCandidates } from "./memory/retrieval.js";
 import { generateQuotes, previewQuote } from "./intelligence/quote.js";
-import { selectRoute, routeIntent } from "./intelligence/router.js";
-import { executeCapability, registerSkillHandler } from "./execution/executor.js";
+import { routeIntent } from "./intelligence/router.js";
+import { executeCapability } from "./execution/executor.js";
 import { recordExecution, recordOutcome, writebackOutcome, getOutcomeSummary } from "./adaptation/writeback.js";
 import { compareVersions, recordVersionEdge, promoteVersion, rollbackVersion, getVersionLineage } from "./adaptation/versioning.js";
 import {

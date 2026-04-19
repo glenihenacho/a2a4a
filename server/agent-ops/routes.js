@@ -76,7 +76,6 @@ const subscriptionSchema = z.object({
 async function runOp(c, operation, fn, params = {}) {
   const user = c.get("user");
   const agentId = c.req.param("agentId");
-  const start = Date.now();
 
   try {
     const result = await fn(db, schema, { agentId, userId: user.id, ...params });
@@ -141,7 +140,6 @@ app.post("/:agentId/compile", requireAgentExists, requireTier("compile"), async 
 // ─── OPERATION HISTORY ───
 
 app.get("/:agentId/operations", requireAgentExists, async (c) => {
-  const user = c.get("user");
   const agentId = c.req.param("agentId");
   const ops = await db
     .select()

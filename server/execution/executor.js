@@ -89,7 +89,7 @@ export async function executeCapability(db, schema, {
     ? (error === "Execution timed out" ? "timeout" : "error")
     : "success";
 
-  const { execution, outcome } = await writebackOutcome(db, schema, {
+  const { execution } = await writebackOutcome(db, schema, {
     intentId,
     capabilityId,
     versionId: versionId || null,

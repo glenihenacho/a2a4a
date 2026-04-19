@@ -153,14 +153,14 @@ const commands = {};
 commands.login = async (args) => {
   const [email, password] = args;
   if (!email || !password) return usage("login <email> <password>");
-  const res = await post("/api/auth/sign-in/email", { email, password });
+  await post("/api/auth/sign-in/email", { email, password });
   console.log(`${c.green}✓${c.reset} Logged in as ${c.bold}${email}${c.reset}`);
 };
 
 commands.signup = async (args) => {
   const [email, password, role] = args;
   if (!email || !password) return usage("signup <email> <password> [role]");
-  const res = await post("/api/auth/sign-up/email", {
+  await post("/api/auth/sign-up/email", {
     email,
     password,
     name: email.split("@")[0],
@@ -187,7 +187,6 @@ commands.logout = async () => {
 
 commands.agents = async (args) => {
   const [sub, ...rest] = args;
-  const { flags } = parseFlags(rest);
 
   switch (sub) {
     case "list": {
@@ -291,7 +290,7 @@ commands.ops = async (args) => {
       break;
     }
 
-    case "history":
+    case "history": {
       if (!agentId) return usage("ops history <agentId>");
       const ops = await get(`/api/agent-ops/${agentId}/operations`);
       printTable(Array.isArray(ops) ? ops : [], [
@@ -303,6 +302,7 @@ commands.ops = async (args) => {
         { key: "createdAt", label: "Created", fmt: (v) => v ? new Date(v).toLocaleString() : "" },
       ]);
       break;
+    }
 
     default:
       usage("ops <add|remove|update|review|suggest|optimize|test|shadow|compile|history>");
@@ -329,7 +329,7 @@ commands.sub = async (args) => {
     }
 
     case "cancel": {
-      const data = await del("/api/agent-ops/subscription");
+      await del("/api/agent-ops/subscription");
       console.log(`${c.green}✓${c.reset} Subscription canceled`);
       break;
     }

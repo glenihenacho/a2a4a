@@ -2,7 +2,7 @@
 // Records execution outcomes and updates rolling capability metrics.
 // This is mandatory — without writeback, the system is just retrieval.
 
-import { eq, and, gte, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 /**
  * Record an execution and its outcome.
