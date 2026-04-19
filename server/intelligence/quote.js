@@ -46,6 +46,21 @@ export async function generateQuote(db, schema, capability, intent) {
     quotedCostCents = metrics.avgCostCents || costModel.baseCents || costModel.perCallCents || 0;
   }
 
+  if (capability.agentId) {
+    try {
+      const [agent] = await db
+        .select()
+        .from(schema.agents)
+        .where(eq(schema.agents.id, capability.agentId));
+      if (agent?.sla?.maxCost) {
+        const maxCostCents = parseInt(agent.sla.maxCost.replace(/[^0-9]/g, ""), 10) * 100;
+        if (maxCostCents > 0 && quotedCostCents > maxCostCents) {
+          quotedCostCents = maxCostCents;
+        }
+      }
+    } catch {}
+  }
+
   // ─── Latency estimation ───
   let quotedLatencyMs;
   if (recentMetrics.length > 0) {

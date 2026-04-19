@@ -16,45 +16,12 @@ export function registerSkillHandler(name, handlerFn) {
   skillHandlers.set(name, handlerFn);
 }
 
-/**
- * Execute a skill-type capability.
- */
-async function executeSkill(capability, input, signal) {
+async function dispatch(capability, input, signal) {
   const handler = skillHandlers.get(capability.name);
   if (!handler) {
-    throw new Error(`No handler registered for skill "${capability.name}"`);
+    throw new Error(`No handler registered for capability "${capability.name}"`);
   }
   return handler(input, { capability, signal });
-}
-
-/**
- * Execute an internal_agent-type capability (marketplace agent bridge).
- */
-async function executeInternalAgent(capability, input, signal) {
-  const handler = skillHandlers.get(`agent:${capability.agentId}`);
-  if (handler) {
-    return handler(input, { capability, signal });
-  }
-  return {
-    outputPayload: { message: `Agent ${capability.agentId} execution simulated` },
-    actualCostCents: capability.costModel?.baseCents || 0,
-    actualLatencyMs: capability.latencyProfile?.p50Ms || 100,
-    tokensUsed: 0,
-  };
-}
-
-/**
- * Dispatch execution to the correct handler based on providerType.
- */
-async function dispatch(capability, input, signal) {
-  switch (capability.providerType) {
-    case "skill":
-      return executeSkill(capability, input, signal);
-    case "internal_agent":
-      return executeInternalAgent(capability, input, signal);
-    default:
-      throw new Error(`Unknown provider type: ${capability.providerType}`);
-  }
 }
 
 /**
@@ -86,7 +53,11 @@ export async function executeCapability(db, schema, {
 
   await db
     .update(schema.executionIntents)
-    .set({ status: "executing" })
+    .set({
+      status: "executing",
+      capabilityId,
+      agentId: capability.agentId || null,
+    })
     .where(eq(schema.executionIntents.id, intentId));
 
   const startedAt = new Date();

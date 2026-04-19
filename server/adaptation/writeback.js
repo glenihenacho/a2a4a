@@ -239,6 +239,43 @@ export async function updateRollingMetrics(db, schema, capabilityId) {
     .where(eq(schema.capabilities.id, capabilityId));
 }
 
+export async function aggregateAgentMetrics(db, schema, agentId) {
+  const caps = await db
+    .select()
+    .from(schema.capabilities)
+    .where(eq(schema.capabilities.agentId, agentId));
+
+  if (caps.length === 0) return;
+
+  let totalRuns = 0;
+  let weightedSuccessRate = 0;
+  let totalCost = 0;
+  let costCount = 0;
+
+  for (const cap of caps) {
+    const m = cap.observedMetrics || {};
+    const runs = m.totalRuns || 0;
+    totalRuns += runs;
+    weightedSuccessRate += (m.successRate || 0) * runs;
+    if (m.avgCostCents > 0) {
+      totalCost += m.avgCostCents;
+      costCount++;
+    }
+  }
+
+  const successRate = totalRuns > 0 ? Math.round((weightedSuccessRate / totalRuns) * 10) / 10 : 0;
+  const avgCostCents = costCount > 0 ? Math.round(totalCost / costCount) : 0;
+
+  await db
+    .update(schema.agents)
+    .set({
+      totalRuns,
+      successRate,
+      avgCost: avgCostCents > 0 ? `$${(avgCostCents / 100).toFixed(0)}` : "$0",
+    })
+    .where(eq(schema.agents.id, agentId));
+}
+
 function splitIntoWindows(items, windowSize) {
   const windows = [];
   for (let i = 0; i < items.length; i += windowSize) {
@@ -259,17 +296,27 @@ function standardDeviation(values) {
  * This is the primary API for the adaptation plane.
  */
 export async function writebackOutcome(db, schema, executionData, outcomeData) {
-  const execution = await recordExecution(db, schema, executionData);
+  return db.transaction(async (tx) => {
+    const execution = await recordExecution(tx, schema, executionData);
 
-  const outcome = await recordOutcome(db, schema, {
-    ...outcomeData,
-    executionId: execution.id,
-    capabilityId: executionData.capabilityId,
-    versionId: executionData.versionId,
-    intentId: executionData.intentId,
+    const outcome = await recordOutcome(tx, schema, {
+      ...outcomeData,
+      executionId: execution.id,
+      capabilityId: executionData.capabilityId,
+      versionId: executionData.versionId,
+      intentId: executionData.intentId,
+    });
+
+    const [cap] = await tx
+      .select()
+      .from(schema.capabilities)
+      .where(eq(schema.capabilities.id, executionData.capabilityId));
+    if (cap?.agentId) {
+      await aggregateAgentMetrics(tx, schema, cap.agentId).catch(() => {});
+    }
+
+    return { execution, outcome };
   });
-
-  return { execution, outcome };
 }
 
 /**

@@ -15,7 +15,6 @@ import {
 
 export const providerTypeEnum = pgEnum("provider_type", [
   "skill",
-  "internal_agent",
 ]);
 export const capabilityStatusEnum = pgEnum("capability_status", [
   "draft",
@@ -238,6 +237,7 @@ export const intents = pgTable("intents", {
   created: varchar("created", { length: 20 }).notNull(),
   budget: varchar("budget", { length: 30 }).notNull(),
   agent: varchar("agent", { length: 100 }),
+  agentId: varchar("agent_id", { length: 16 }),
   milestone: text("milestone"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -330,6 +330,7 @@ export const jobs = pgTable("jobs", {
   userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   intentId: varchar("intent_id", { length: 16 }).notNull(),
   agentId: varchar("agent_id", { length: 16 }).notNull(),
+  capabilityId: varchar("capability_id", { length: 32 }),
   status: jobStatusEnum("status").default("created").notNull(),
   vertical: verticalEnum("vertical").notNull(),
   slaTemplateId: varchar("sla_template_id", { length: 16 }),
@@ -508,6 +509,8 @@ export const executionIntents = pgTable(
     inputFeatures: jsonb("input_features"), // extracted features from the goal
     status: executionIntentStatusEnum("status").default("pending").notNull(),
     selectedRouteId: varchar("selected_route_id", { length: 32 }),
+    capabilityId: varchar("capability_id", { length: 32 }),
+    agentId: varchar("agent_id", { length: 16 }),
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     sourceIntentId: varchar("source_intent_id", { length: 16 }), // link to marketplace intent
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

@@ -420,7 +420,10 @@ export async function opShadow(db, schema, { agentId, userId, action, competitor
 
   switch (action) {
     case "start": {
-      const competitors = await db
+      const agentCaps = await listCapabilities(db, schema, { agentId });
+      const agentDomains = new Set(agentCaps.flatMap((c) => c.intentDomains || []));
+
+      const allLiveAgents = await db
         .select()
         .from(schema.agents)
         .where(
@@ -428,9 +431,21 @@ export async function opShadow(db, schema, { agentId, userId, action, competitor
             ne(schema.agents.id, agentId),
             eq(schema.agents.status, "live"),
           ),
-        )
-        .orderBy(desc(schema.agents.successRate))
-        .limit(3);
+        );
+
+      const scored = [];
+      for (const comp of allLiveAgents) {
+        const compCaps = await listCapabilities(db, schema, { agentId: comp.id });
+        const compDomains = new Set(compCaps.flatMap((c) => c.intentDomains || []));
+        const overlap = [...agentDomains].filter((d) => compDomains.has(d)).length;
+        const avgSuccess = compCaps.length > 0
+          ? compCaps.reduce((s, c) => s + (c.observedMetrics?.successRate || 0), 0) / compCaps.length
+          : 0;
+        scored.push({ ...comp, overlap, avgSuccess });
+      }
+      const competitors = scored
+        .sort((a, b) => b.overlap - a.overlap || b.avgSuccess - a.avgSuccess)
+        .slice(0, 3);
 
       const added = [];
       for (const comp of competitors) {
