@@ -23,6 +23,7 @@
     "db:push": "drizzle-kit push",
     "db:seed": "node server/db/seed.js",
     "db:studio": "drizzle-kit studio",
+    "cli": "node bin/cli.js",
     "prepare": "husky"
   },
   "lint-staged": {
