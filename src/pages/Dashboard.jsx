@@ -4236,13 +4236,13 @@ function AgentDetailModal({ agent, mob, onClose }) {
                         flexShrink: 0,
                       }}
                     >
-                      {cap.verb}
+                      {cap.name}
                     </code>
                     <Badge color={vCol[cap.domain]?.c || blue} bg={vCol[cap.domain]?.b || "rgba(66,165,245,.1)"}>
                       {cap.domain}
                     </Badge>
                     <span style={{ fontSize: 11, color: "rgba(255,255,255,.3)", flex: 1, lineHeight: 1.4 }}>
-                      {cap.desc}
+                      {cap.description}
                     </span>
                   </div>
                 ))}
@@ -4724,17 +4724,71 @@ function NewAgentFlow({ mob, onClose }) {
     const isBoth = /pro|enterprise|full|dual/i.test(uri);
     const verts = isBoth ? ["SEO", "AIO"] : isAIO ? ["AIO"] : ["SEO"];
     const seoCaps = [
-      { verb: "crawl_site", domain: "SEO", desc: "Deep site crawl with Core Web Vitals" },
-      { verb: "audit_technical", domain: "SEO", desc: "Lighthouse-driven audit with fix recommendations" },
-      { verb: "optimize_onpage", domain: "SEO", desc: "Title, meta, and content structure optimization" },
-      { verb: "track_rankings", domain: "SEO", desc: "SERP position monitoring" },
-      { verb: "build_links", domain: "SEO", desc: "Outreach-based backlink acquisition" },
+      {
+        name: "crawl_site",
+        domain: "SEO",
+        description: "Deep site crawl with Core Web Vitals",
+        triggers: ["technical-seo", "crawl"],
+        tags: ["crawl", "cwv"],
+      },
+      {
+        name: "audit_technical",
+        domain: "SEO",
+        description: "Lighthouse-driven audit with fix recommendations",
+        triggers: ["technical-audit", "lighthouse"],
+        tags: ["audit", "lighthouse"],
+      },
+      {
+        name: "optimize_onpage",
+        domain: "SEO",
+        description: "Title, meta, and content structure optimization",
+        triggers: ["on-page", "meta-tags"],
+        tags: ["onpage", "meta"],
+      },
+      {
+        name: "track_rankings",
+        domain: "SEO",
+        description: "SERP position monitoring",
+        triggers: ["rank-tracking", "serp-monitoring"],
+        tags: ["rankings", "serp"],
+      },
+      {
+        name: "build_links",
+        domain: "SEO",
+        description: "Outreach-based backlink acquisition",
+        triggers: ["link-building", "backlinks"],
+        tags: ["links", "outreach"],
+      },
     ];
     const aioCaps = [
-      { verb: "restructure_content", domain: "AIO", desc: "Rewrite content for AI-friendly extraction" },
-      { verb: "implement_schema", domain: "AIO", desc: "Deploy FAQ, HowTo, and custom schema markup" },
-      { verb: "monitor_aio", domain: "AIO", desc: "Track AI Overview appearances and citation status" },
-      { verb: "optimize_entities", domain: "AIO", desc: "Entity resolution and knowledge graph alignment" },
+      {
+        name: "restructure_content",
+        domain: "AIO",
+        description: "Rewrite content for AI-friendly extraction",
+        triggers: ["content-restructuring", "ai-optimization"],
+        tags: ["content", "ai-friendly"],
+      },
+      {
+        name: "implement_schema",
+        domain: "AIO",
+        description: "Deploy FAQ, HowTo, and custom schema markup",
+        triggers: ["schema-markup", "structured-data"],
+        tags: ["schema", "jsonld"],
+      },
+      {
+        name: "monitor_aio",
+        domain: "AIO",
+        description: "Track AI Overview appearances and citation status",
+        triggers: ["aio-monitoring", "citation-tracking"],
+        tags: ["monitoring", "aio"],
+      },
+      {
+        name: "optimize_entities",
+        domain: "AIO",
+        description: "Entity resolution and knowledge graph alignment",
+        triggers: ["entity-resolution", "knowledge-graph"],
+        tags: ["entities", "knowledge-graph"],
+      },
     ];
     let caps = [];
     let tls = [];
@@ -4813,7 +4867,7 @@ function NewAgentFlow({ mob, onClose }) {
           `  verticals: [${inferred.verticals.join(", ")}]`,
         ];
       else if (sp.id === "capabilities")
-        extra = inferred.capabilities.map((c) => `  @capability ${c.verb} [${c.domain}]`);
+        extra = inferred.capabilities.map((c) => `  @capability ${c.name} [${c.domain}]`);
       else if (sp.id === "schemas")
         extra = [
           `  input: { ${inferred.inputFields.join(", ")} }`,
@@ -5382,7 +5436,7 @@ function NewAgentFlow({ mob, onClose }) {
                   key: "capabilities",
                   title: "Capabilities",
                   color: blue,
-                  items: inferred.capabilities.map((c) => `${c.verb} [${c.domain}]`),
+                  items: inferred.capabilities.map((c) => `${c.name} [${c.domain}]`),
                   icon: "⟐",
                 },
                 { key: "inputFields", title: "Input Schema", color: "#FFA726", items: inferred.inputFields, icon: "⬡" },
@@ -5585,7 +5639,7 @@ function Agents({ mob, tab }) {
     MOCK_AGENTS.forEach((a) => {
       s.set(a.name, { label: a.name, type: "agent", icon: "◆" });
       a.verticals.forEach((v) => s.set(`v:${v}`, { label: v, type: "vertical", icon: "⬡" }));
-      a.capabilities.forEach((c) => s.set(`c:${c.verb}`, { label: c.verb, type: "capability", icon: "⚙" }));
+      a.capabilities.forEach((c) => s.set(`c:${c.name}`, { label: c.name, type: "capability", icon: "⚙" }));
       s.set(`s:${a.status}`, { label: a.status, type: "status", icon: a.status === "live" ? "●" : "◐" });
     });
     return [...s.values()];
@@ -5631,7 +5685,7 @@ function Agents({ mob, tab }) {
     return committed.every((t) => {
       if (t.type === "agent") return a.name === t.label;
       if (t.type === "vertical") return a.verticals.includes(t.label);
-      if (t.type === "capability") return a.capabilities.some((c) => c.verb === t.label);
+      if (t.type === "capability") return a.capabilities.some((c) => c.name === t.label);
       if (t.type === "status") return a.status === t.label;
       return true;
     });
@@ -6132,7 +6186,7 @@ function Agents({ mob, tab }) {
                           color: "rgba(255,255,255,.3)",
                         }}
                       >
-                        {c.verb}
+                        {c.name}
                       </span>
                     ))}
                     {agent.capabilities.length > (mob ? 3 : 4) && (

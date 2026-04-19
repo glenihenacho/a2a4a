@@ -140,6 +140,135 @@ export async function fetchStatusCfg() {
   return fetchJson("/config/status-cfg");
 }
 
+// ─── CAPABILITIES (Memory Plane) ───
+
+export async function fetchCapabilities(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.providerType) params.set("providerType", filters.providerType);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.agentId) params.set("agentId", filters.agentId);
+  const qs = params.toString();
+  return fetchJson(`/capabilities${qs ? `?${qs}` : ""}`);
+}
+
+export async function fetchCapability(id) {
+  return fetchJson(`/capabilities/${id}`);
+}
+
+export async function createCapability(data) {
+  return postJson("/capabilities", data);
+}
+
+export async function transitionCapability(id, status) {
+  return postJson(`/capabilities/${id}/transition`, { status });
+}
+
+// ─── CAPABILITY VERSIONS ───
+
+export async function createCapabilityVersion(data) {
+  return postJson("/capability-versions", data);
+}
+
+export async function fetchVersionLineage(capabilityId) {
+  return fetchJson(`/capabilities/${capabilityId}/versions`);
+}
+
+export async function promoteCapabilityVersion(versionId, capabilityId) {
+  return postJson(`/capability-versions/${versionId}/promote`, { capabilityId });
+}
+
+export async function rollbackCapabilityVersion(versionId, capabilityId, toVersionId) {
+  return postJson(`/capability-versions/${versionId}/rollback`, { capabilityId, toVersionId });
+}
+
+export async function compareCapabilityVersions(fromVersionId, toVersionId, filters = {}) {
+  return postJson("/capability-versions/compare", { fromVersionId, toVersionId, ...filters });
+}
+
+// ─── EXECUTION INTENTS (Intelligence Plane) ───
+
+export async function createExecutionIntent(data) {
+  return postJson("/execution-intents", data);
+}
+
+export async function fetchExecutionIntents() {
+  return fetchJson("/execution-intents");
+}
+
+export async function fetchExecutionIntent(id) {
+  return fetchJson(`/execution-intents/${id}`);
+}
+
+export async function executeIntent(id, inputPayload = null) {
+  return postJson(`/execution-intents/${id}/execute`, { inputPayload });
+}
+
+// ─── SKILL INGESTION ───
+
+export async function ingestSkill(data) {
+  return postJson("/skills/ingest", data);
+}
+
+export async function ingestSkillBatch(skills) {
+  return postJson("/skills/ingest-batch", { skills });
+}
+
+// ─── CAPABILITY UPSERT ───
+
+export async function upsertCapability(data) {
+  return postJson("/capabilities/upsert", data);
+}
+
+// ─── QUOTE ───
+
+export async function previewQuoteApi(capabilityId, intent = {}) {
+  return postJson("/quote/preview", { capabilityId, intent });
+}
+
+// ─── EXECUTIONS & OUTCOMES (Adaptation Plane) ───
+
+export async function createExecution(data) {
+  return postJson("/executions", data);
+}
+
+export async function fetchExecutions(capabilityId) {
+  const qs = capabilityId ? `?capabilityId=${capabilityId}` : "";
+  return fetchJson(`/executions${qs}`);
+}
+
+export async function createOutcome(data) {
+  return postJson("/outcomes", data);
+}
+
+export async function writebackOutcome(data) {
+  return postJson("/outcomes/writeback", data);
+}
+
+export async function fetchOutcomeSummary(capabilityId) {
+  return fetchJson(`/outcomes/summary/${capabilityId}`);
+}
+
+// ─── ROUTING POLICIES ───
+
+export async function fetchRoutingPolicies() {
+  return fetchJson("/routing-policies");
+}
+
+export async function createRoutingPolicy(data) {
+  return postJson("/routing-policies", data);
+}
+
+export async function updateRoutingPolicy(id, data) {
+  const res = await fetch(`${API_BASE}/routing-policies/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`API PUT /routing-policies/${id}: ${res.status}`);
+  return res.json();
+}
+
 // ─── WAITLIST ───
 
 export async function submitWaitlist(data) {
@@ -148,4 +277,67 @@ export async function submitWaitlist(data) {
 
 export async function fetchWaitlistStats() {
   return fetchJson("/waitlist/stats");
+}
+
+// ─── AGENT OPERATIONS ───
+
+export async function agentOpAdd(agentId) {
+  return postJson(`/agent-ops/${agentId}/add`, {});
+}
+
+export async function agentOpRemove(agentId) {
+  return postJson(`/agent-ops/${agentId}/remove`, {});
+}
+
+export async function agentOpUpdate(agentId, updates) {
+  return postJson(`/agent-ops/${agentId}/update`, { updates });
+}
+
+export async function agentOpReview(agentId) {
+  return fetchJson(`/agent-ops/${agentId}/review`);
+}
+
+export async function agentOpSuggest(agentId) {
+  return postJson(`/agent-ops/${agentId}/suggest`, {});
+}
+
+export async function agentOpOptimize(agentId) {
+  return postJson(`/agent-ops/${agentId}/optimize`, {});
+}
+
+export async function agentOpTest(agentId, testPayload = null) {
+  return postJson(`/agent-ops/${agentId}/test`, { testPayload });
+}
+
+export async function agentOpShadow(agentId, action, competitorAgentId = null) {
+  return postJson(`/agent-ops/${agentId}/shadow`, { action, competitorAgentId });
+}
+
+export async function agentOpCompile(agentId, versionId) {
+  return postJson(`/agent-ops/${agentId}/compile`, { versionId });
+}
+
+export async function fetchAgentOperations(agentId) {
+  return fetchJson(`/agent-ops/${agentId}/operations`);
+}
+
+export async function fetchSmbSubscription() {
+  return fetchJson("/agent-ops/subscription");
+}
+
+export async function createSmbSubscription(tier) {
+  return postJson("/agent-ops/subscription", { tier });
+}
+
+export async function cancelSmbSubscription() {
+  const res = await fetch(`${API_BASE}/agent-ops/subscription`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`API DELETE /agent-ops/subscription: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchTierGates() {
+  return fetchJson("/agent-ops/tier-gates");
 }

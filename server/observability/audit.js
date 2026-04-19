@@ -99,4 +99,19 @@ export const AuditEvent = {
 
   // SLA
   SLA_VERDICT_RECORDED: "sla.verdict.recorded",
+
+  // Agent Operations
+  AGENT_OP_STARTED: "agent_op.started",
+  AGENT_OP_COMPLETED: "agent_op.completed",
+  AGENT_OP_FAILED: "agent_op.failed",
+
+  // SMB Subscriptions
+  SMB_SUBSCRIPTION_CREATED: "smb_subscription.created",
+  SMB_SUBSCRIPTION_UPGRADED: "smb_subscription.upgraded",
+  SMB_SUBSCRIPTION_CANCELED: "smb_subscription.canceled",
+
+  // Shadow
+  SHADOW_COMPETITOR_ADDED: "shadow.competitor_added",
+  SHADOW_COMPETITOR_REMOVED: "shadow.competitor_removed",
+  SHADOW_RUN_COMPLETED: "shadow.run_completed",
 };

@@ -19,6 +19,21 @@ import {
 } from "./stripe.js";
 import { lockEscrow, releaseEscrow, refundEscrow, calculateRefund } from "./escrow.js";
 import {
+  ingestCapability,
+  createCapabilityVersion,
+  transitionCapabilityStatus,
+  listCapabilities,
+  getCapabilityWithVersions,
+  upsertCapability,
+} from "./memory/registry.js";
+import { ingestSkill, ingestSkillBatch } from "./memory/ingest.js";
+import { retrieveCandidates, persistCandidates } from "./memory/retrieval.js";
+import { generateQuotes, previewQuote } from "./intelligence/quote.js";
+import { routeIntent } from "./intelligence/router.js";
+import { executeCapability } from "./execution/executor.js";
+import { recordExecution, recordOutcome, writebackOutcome, getOutcomeSummary } from "./adaptation/writeback.js";
+import { compareVersions, recordVersionEdge, promoteVersion, rollbackVersion, getVersionLineage } from "./adaptation/versioning.js";
+import {
   log,
   requestId,
   requestLogger,
@@ -37,6 +52,7 @@ import {
   audit,
   AuditEvent,
 } from "./observability/index.js";
+import { agentOpsRoutes } from "./agent-ops/routes.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -169,7 +185,15 @@ const agentSchema = z.object({
   status: z.enum(["evaluation", "live", "suspended"]).optional(),
   verticals: z.array(z.enum(["SEO", "AIO"])),
   description: z.string().min(1).max(2000),
-  capabilities: z.array(z.object({ verb: z.string(), domain: z.string(), desc: z.string() })),
+  capabilities: z.array(z.object({
+    name: z.string(),
+    domain: z.string(),
+    description: z.string(),
+    triggers: z.array(z.string()).optional().default([]),
+    tags: z.array(z.string()).optional().default([]),
+    inputSchema: z.object({}).passthrough().optional(),
+    outputSchema: z.object({}).passthrough().optional(),
+  })),
   inputSchema: z.object({ fields: z.array(z.string()), version: z.string().optional() }).passthrough(),
   outputSchema: z.object({ fields: z.array(z.string()), version: z.string().optional() }).passthrough(),
   toolRequirements: z.array(z.string()),
@@ -230,6 +254,100 @@ const previewRefundSchema = z.object({
 const waitlistSchema = z.object({
   email: z.string().email().max(255),
   imageUri: z.string().max(500).optional(),
+});
+
+// ─── MEMORY / INTELLIGENCE ZOD SCHEMAS ───
+
+const capabilitySchema = z.object({
+  name: z.string().min(1).max(200),
+  providerType: z.enum(["skill", "internal_agent"]),
+  status: z.enum(["draft", "evaluating", "live", "deprecated", "rolled_back"]).optional(),
+  intentDomains: z.array(z.string()),
+  inputSchema: z.object({}).passthrough().nullable().optional(),
+  outputSchema: z.object({}).passthrough().nullable().optional(),
+  preconditions: z.object({}).passthrough().nullable().optional(),
+  resourceRequirements: z.object({}).passthrough().nullable().optional(),
+  securityScope: z.object({}).passthrough().nullable().optional(),
+  costModel: z.object({}).passthrough().nullable().optional(),
+  latencyProfile: z.object({}).passthrough().nullable().optional(),
+  qualityProfile: z.object({}).passthrough().nullable().optional(),
+  failureModes: z.array(z.object({}).passthrough()).nullable().optional(),
+  dependencies: z.array(z.string()).nullable().optional(),
+  agentId: z.string().max(16).nullable().optional(),
+});
+
+const capVersionSchema = z.object({
+  capabilityId: z.string().max(32),
+  versionTag: z.string().max(40),
+  deployStatus: z.enum(["shadow", "canary", "promoted", "demoted", "rolled_back"]).optional(),
+  changelog: z.string().max(2000).nullable().optional(),
+  inputSchema: z.object({}).passthrough().nullable().optional(),
+  outputSchema: z.object({}).passthrough().nullable().optional(),
+  costModel: z.object({}).passthrough().nullable().optional(),
+  latencyProfile: z.object({}).passthrough().nullable().optional(),
+  qualityProfile: z.object({}).passthrough().nullable().optional(),
+  configSnapshot: z.object({}).passthrough().nullable().optional(),
+});
+
+const executionIntentSchema = z.object({
+  goal: z.string().min(1).max(2000),
+  domain: z.string().max(100).nullable().optional(),
+  qualityThreshold: z.number().min(0).max(100).nullable().optional(),
+  latencyBoundMs: z.number().int().min(0).nullable().optional(),
+  budgetBoundCents: z.number().int().min(0).nullable().optional(),
+  privacyLevel: z.string().max(30).nullable().optional(),
+  environment: z.string().max(60).nullable().optional(),
+  requiredScope: z.array(z.string()).nullable().optional(),
+  inputFeatures: z.object({}).passthrough().nullable().optional(),
+  parentIntentId: z.string().max(32).nullable().optional(),
+  sourceIntentId: z.string().max(16).nullable().optional(),
+});
+
+const outcomeSchema = z.object({
+  executionId: z.string().max(32),
+  capabilityId: z.string().max(32),
+  versionId: z.string().max(32).nullable().optional(),
+  intentId: z.string().max(32).nullable().optional(),
+  verdict: z.enum(["success", "partial", "failure", "timeout", "error"]),
+  qualityScore: z.number().min(0).max(100).nullable().optional(),
+  humanApproval: z.boolean().nullable().optional(),
+  humanFeedback: z.string().max(2000).nullable().optional(),
+  costDeltaCents: z.number().int().nullable().optional(),
+  latencyDeltaMs: z.number().int().nullable().optional(),
+  qualityDelta: z.number().nullable().optional(),
+  fallbackUsed: z.boolean().optional(),
+  repairTriggered: z.boolean().optional(),
+  dependencyChain: z.array(z.string()).nullable().optional(),
+});
+
+const executionSchema = z.object({
+  intentId: z.string().max(32),
+  capabilityId: z.string().max(32),
+  versionId: z.string().max(32).nullable().optional(),
+  routeDecision: z.enum(["execute", "shadow", "fallback", "escalate", "reject"]).optional(),
+  inputPayload: z.object({}).passthrough().nullable().optional(),
+  outputPayload: z.object({}).passthrough().nullable().optional(),
+  traceLog: z.array(z.object({}).passthrough()).nullable().optional(),
+  actualCostCents: z.number().int().nullable().optional(),
+  actualLatencyMs: z.number().int().nullable().optional(),
+  tokensUsed: z.number().int().nullable().optional(),
+  error: z.string().max(2000).nullable().optional(),
+  fallbackTriggered: z.boolean().optional(),
+  repairRequired: z.boolean().optional(),
+});
+
+const routingPolicySchema = z.object({
+  name: z.string().min(1).max(200),
+  scope: z.object({}).passthrough(),
+  rules: z.object({}).passthrough(),
+  weights: z.object({
+    quality: z.number().min(0).max(1),
+    cost: z.number().min(0).max(1),
+    latency: z.number().min(0).max(1),
+    risk: z.number().min(0).max(1),
+  }),
+  priority: z.number().int().optional(),
+  active: z.boolean().optional(),
 });
 
 const connectCreateSchema = z.object({
@@ -965,6 +1083,36 @@ app.post("/api/webhooks/stripe", requireDb, async (c) => {
       });
       break;
     }
+    case "customer.subscription.updated": {
+      const sub = event.data.object;
+      log.info(`Subscription updated: ${sub.id}`, { status: sub.status });
+      if (isDbAvailable()) {
+        await db
+          .update(schema.smbSubscriptions)
+          .set({
+            currentPeriodStart: new Date(sub.current_period_start * 1000),
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+          })
+          .where(eq(schema.smbSubscriptions.stripeSubscriptionId, sub.id));
+      }
+      break;
+    }
+    case "customer.subscription.deleted": {
+      const sub = event.data.object;
+      log.info(`Subscription deleted: ${sub.id}`);
+      if (isDbAvailable()) {
+        await db
+          .update(schema.smbSubscriptions)
+          .set({ canceledAt: new Date(), tier: "free" })
+          .where(eq(schema.smbSubscriptions.stripeSubscriptionId, sub.id));
+      }
+      break;
+    }
+    case "invoice.payment_failed": {
+      const inv = event.data.object;
+      log.warn(`Invoice payment failed: ${inv.id}`, { subscription: inv.subscription });
+      break;
+    }
   }
 
   return c.json({ received: true });
@@ -978,6 +1126,10 @@ app.get("/api/stripe/status", (c) => {
     platformFeePct: PLATFORM_FEE_PCT,
   });
 });
+
+// ─── AGENT OPERATIONS (sub-app) ───
+
+app.route("/api/agent-ops", agentOpsRoutes);
 
 // ─── METRICS ───
 
@@ -1153,6 +1305,360 @@ app.post("/api/waitlist", rateLimit({ windowMs: 60_000, max: 5 }), async (c) => 
     })
     .returning();
   return c.json({ success: true, slotNumber: entry.slotNumber, remaining: FOUNDING_TOTAL - entry.slotNumber }, 201);
+});
+
+// ─── MEMORY PLANE: CAPABILITIES ───
+
+app.get("/api/capabilities", async (c) => {
+  if (!isDbAvailable()) return c.json([]);
+  try {
+    const filters = {};
+    const providerType = c.req.query("providerType");
+    const status = c.req.query("status");
+    const agentId = c.req.query("agentId");
+    if (providerType) filters.providerType = providerType;
+    if (status) filters.status = status;
+    if (agentId) filters.agentId = agentId;
+    const caps = await listCapabilities(db, schema, filters);
+    return c.json(caps);
+  } catch (err) {
+    log.error("GET /api/capabilities failed", { error: err.message });
+    return c.json([]);
+  }
+});
+
+app.get("/api/capabilities/:id", async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const cap = await getCapabilityWithVersions(db, schema, c.req.param("id"));
+  if (!cap) return c.json({ error: "Not found" }, 404);
+  return c.json(cap);
+});
+
+app.post("/api/capabilities", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = capabilitySchema.parse(body);
+  const cap = await ingestCapability(db, schema, data);
+  return c.json(cap, 201);
+});
+
+app.post("/api/capabilities/:id/transition", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.status) return c.json({ error: "Missing status" }, 400);
+  try {
+    const cap = await transitionCapabilityStatus(db, schema, c.req.param("id"), body.status);
+    return c.json(cap);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+// ─── CAPABILITY VERSIONS ───
+
+app.post("/api/capability-versions", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = capVersionSchema.parse(body);
+  const ver = await createCapabilityVersion(db, schema, data);
+  return c.json(ver, 201);
+});
+
+app.get("/api/capabilities/:id/versions", async (c) => {
+  if (!isDbAvailable()) return c.json({ versions: [], edges: [] });
+  const lineage = await getVersionLineage(db, schema, c.req.param("id"));
+  return c.json(lineage);
+});
+
+app.post("/api/capability-versions/:id/promote", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.capabilityId) return c.json({ error: "Missing capabilityId" }, 400);
+  try {
+    const ver = await promoteVersion(db, schema, body.capabilityId, c.req.param("id"));
+    return c.json(ver);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+app.post("/api/capability-versions/:id/rollback", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.capabilityId || !body?.toVersionId) {
+    return c.json({ error: "Missing capabilityId or toVersionId" }, 400);
+  }
+  try {
+    const ver = await rollbackVersion(db, schema, body.capabilityId, body.toVersionId);
+    return c.json(ver);
+  } catch (err) {
+    return c.json({ error: err.message }, 400);
+  }
+});
+
+app.post("/api/capability-versions/compare", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.fromVersionId || !body?.toVersionId) {
+    return c.json({ error: "Missing fromVersionId or toVersionId" }, 400);
+  }
+  const filters = {};
+  if (body.intentFamily) filters.intentFamily = body.intentFamily;
+  if (body.environment) filters.environment = body.environment;
+  const comparison = await compareVersions(db, schema, body.fromVersionId, body.toVersionId, filters);
+  // Persist the edge
+  await recordVersionEdge(db, schema, comparison);
+  return c.json(comparison);
+});
+
+// ─── INTELLIGENCE PLANE: ROUTING ───
+
+app.post("/api/execution-intents", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = executionIntentSchema.parse(body);
+  const user = c.get("user");
+
+  const result = await routeIntent(
+    db,
+    schema,
+    { ...data, userId: user?.id },
+    retrieveCandidates,
+    generateQuotes,
+    { execute: !!body.execute },
+  );
+
+  const allCandidates = [
+    ...(result.selected ? [result.selected] : []),
+    ...(result.alternatives || []),
+    ...(result.rejected || []),
+  ];
+  if (allCandidates.length > 0) {
+    await persistCandidates(db, schema, result.intent.id, allCandidates);
+  }
+
+  const response = {
+    intentId: result.intent.id,
+    decision: result.decision,
+    selected: result.selected ? {
+      capabilityId: result.selected.id,
+      name: result.selected.name,
+      providerType: result.selected.providerType,
+      routeScore: result.selected.routeScore,
+      quotedCostCents: result.selected.quotedCostCents,
+      quotedLatencyMs: result.selected.quotedLatencyMs,
+      quotedQuality: result.selected.quotedQuality,
+      quotedFailureRisk: result.selected.quotedFailureRisk,
+    } : null,
+    shadowExecution: result.shadowExecution ? {
+      capabilityId: result.shadowExecution.id,
+      name: result.shadowExecution.name,
+    } : null,
+    fallbackRoute: result.fallbackRoute ? {
+      capabilityId: result.fallbackRoute.id,
+      name: result.fallbackRoute.name,
+    } : null,
+    alternativeCount: result.alternatives?.length || 0,
+    rejectedCount: result.rejected?.length || 0,
+    reason: result.reason || null,
+    rules: result.rules,
+    weights: result.weights,
+  };
+
+  if (result.execution) {
+    response.execution = result.execution;
+  }
+
+  return c.json(response, 201);
+});
+
+app.get("/api/execution-intents", async (c) => {
+  if (!isDbAvailable()) return c.json([]);
+  try {
+    const intents = await db.select().from(schema.executionIntents);
+    return c.json(intents);
+  } catch (err) {
+    log.error("GET /api/execution-intents failed", { error: err.message });
+    return c.json([]);
+  }
+});
+
+app.get("/api/execution-intents/:id", async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const [intent] = await db
+    .select()
+    .from(schema.executionIntents)
+    .where(eq(schema.executionIntents.id, c.req.param("id")));
+  if (!intent) return c.json({ error: "Not found" }, 404);
+
+  // Include candidates
+  const candidates = await db
+    .select()
+    .from(schema.intentCandidates)
+    .where(eq(schema.intentCandidates.intentId, intent.id));
+
+  return c.json({ ...intent, candidates });
+});
+
+// ─── EXECUTION: EXECUTE ROUTED INTENT ───
+
+app.post("/api/execution-intents/:id/execute", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const intentId = c.req.param("id");
+  const body = await parseJson(c);
+
+  const [intent] = await db
+    .select()
+    .from(schema.executionIntents)
+    .where(eq(schema.executionIntents.id, intentId));
+  if (!intent) return c.json({ error: "Intent not found" }, 404);
+  if (!intent.selectedRouteId) return c.json({ error: "Intent has no selected route" }, 400);
+
+  const result = await executeCapability(db, schema, {
+    intentId: intent.id,
+    capabilityId: intent.selectedRouteId,
+    routeDecision: "execute",
+    inputPayload: body?.inputPayload || null,
+  });
+
+  return c.json(result, 201);
+});
+
+// ─── SKILL INGESTION ───
+
+app.post("/api/skills/ingest", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.name) return c.json({ error: "Skill definition must have a name" }, 400);
+
+  const result = await ingestSkill(db, schema, body);
+  return c.json(result, 201);
+});
+
+app.post("/api/skills/ingest-batch", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.skills || !Array.isArray(body.skills)) {
+    return c.json({ error: "Expected { skills: [...] }" }, 400);
+  }
+
+  const result = await ingestSkillBatch(db, schema, body.skills);
+  return c.json(result, 201);
+});
+
+// ─── CAPABILITY UPSERT ───
+
+app.post("/api/capabilities/upsert", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+
+  const result = await upsertCapability(db, schema, body);
+  return c.json(result, 201);
+});
+
+// ─── QUOTE PREVIEW ───
+
+app.post("/api/quote/preview", async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.capabilityId) return c.json({ error: "Missing capabilityId" }, 400);
+
+  const [cap] = await db
+    .select()
+    .from(schema.capabilities)
+    .where(eq(schema.capabilities.id, body.capabilityId));
+  if (!cap) return c.json({ error: "Capability not found" }, 404);
+
+  const quote = previewQuote(cap, body.intent || {});
+  return c.json({ capabilityId: cap.id, name: cap.name, ...quote });
+});
+
+// ─── ADAPTATION PLANE: EXECUTIONS & OUTCOMES ───
+
+app.post("/api/executions", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = executionSchema.parse(body);
+  const execution = await recordExecution(db, schema, data);
+  return c.json(execution, 201);
+});
+
+app.get("/api/executions", async (c) => {
+  if (!isDbAvailable()) return c.json([]);
+  const capabilityId = c.req.query("capabilityId");
+  let query = db.select().from(schema.executions);
+  if (capabilityId) {
+    query = query.where(eq(schema.executions.capabilityId, capabilityId));
+  }
+  const execs = await query;
+  return c.json(execs);
+});
+
+app.post("/api/outcomes", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = outcomeSchema.parse(body);
+  const outcome = await recordOutcome(db, schema, data);
+  return c.json(outcome, 201);
+});
+
+app.post("/api/outcomes/writeback", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body?.execution || !body?.outcome) {
+    return c.json({ error: "Missing execution or outcome data" }, 400);
+  }
+  const execData = executionSchema.parse(body.execution);
+  const outcomeData = outcomeSchema.parse(body.outcome);
+  const result = await writebackOutcome(db, schema, execData, outcomeData);
+  return c.json(result, 201);
+});
+
+app.get("/api/outcomes/summary/:capabilityId", async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const summary = await getOutcomeSummary(db, schema, c.req.param("capabilityId"));
+  return c.json(summary);
+});
+
+// ─── ROUTING POLICIES ───
+
+app.get("/api/routing-policies", async (c) => {
+  if (!isDbAvailable()) return c.json([]);
+  const policies = await db.select().from(schema.routingPolicies);
+  return c.json(policies);
+});
+
+app.post("/api/routing-policies", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = routingPolicySchema.parse(body);
+  const id = `POL-${Date.now().toString(36).slice(-8)}`;
+  const [policy] = await db
+    .insert(schema.routingPolicies)
+    .values({ id, ...data })
+    .returning();
+  return c.json(policy, 201);
+});
+
+app.put("/api/routing-policies/:id", requireAuth, async (c) => {
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+  const body = await parseJson(c);
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const data = routingPolicySchema.partial().parse(body);
+  const [updated] = await db
+    .update(schema.routingPolicies)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(schema.routingPolicies.id, c.req.param("id")))
+    .returning();
+  if (!updated) return c.json({ error: "Not found" }, 404);
+  return c.json(updated);
 });
 
 // ─── PROMETHEUS METRICS ───

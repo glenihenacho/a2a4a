@@ -1192,7 +1192,7 @@ function toSimpleAgent(a) {
     avgRuntime: a.stats?.avgRuntime ?? a.avgRuntime ?? "0m",
     sla: a.sla?.uptime ?? a.sla ?? "99%",
     description: a.description,
-    capabilities: Array.isArray(a.capabilities) ? a.capabilities.map((c) => (typeof c === "string" ? c : c.verb)) : [],
+    capabilities: Array.isArray(a.capabilities) ? a.capabilities.map((c) => (typeof c === "string" ? c : c.name)) : [],
     evalClaims: typeof a.evalClaims === "number" ? a.evalClaims : (a.evalClaims?.length ?? 0),
     evalPass: typeof a.evalPass === "number" ? a.evalPass : (a.evalClaims?.filter((e) => e.pass).length ?? 0),
   };
