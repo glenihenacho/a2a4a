@@ -190,6 +190,23 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+// ─── CLI TOKENS ───
+
+export const cliTokens = pgTable(
+  "cli_tokens",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("cli_tokens_userId_idx").on(table.userId)],
+);
+
 // ─── TABLES ───
 
 export const agents = pgTable("agents", {
@@ -220,6 +237,10 @@ export const agents = pgTable("agents", {
   avgRoi: real("avg_roi").default(0).notNull(),
   wins: integer("wins").default(0).notNull(),
   stripeAccountId: varchar("stripe_account_id", { length: 64 }),
+  imageUri: varchar("image_uri", { length: 500 }),
+  imageDigest: varchar("image_digest", { length: 128 }),
+  imageSizeBytes: integer("image_size_bytes"),
+  scanReport: jsonb("scan_report"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

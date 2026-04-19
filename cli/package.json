@@ -1,0 +1,12 @@
+{
+  "name": "@agenticproxies/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "ap": "./bin/ap.js"
+  },
+  "exports": {
+    "./shared/constants": "./shared/constants.js",
+    "./shared/schemas": "./shared/schemas.js"
+  }
+}

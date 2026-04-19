@@ -481,12 +481,12 @@ commands.metrics = async () => {
 
 function usage(specific) {
   if (specific) {
-    console.log(`${c.yellow}Usage:${c.reset} node bin/cli.js ${specific}`);
+    console.log(`${c.yellow}Usage:${c.reset} node bin/admin.js ${specific}`);
     return;
   }
 
   console.log(`
-${c.bold}AgenticProxies CLI${c.reset}
+${c.bold}AgenticProxies Admin CLI${c.reset}
 
 ${c.cyan}Auth${c.reset}
   login <email> <password>        Log in and save session

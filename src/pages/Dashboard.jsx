@@ -4694,15 +4694,12 @@ function NewAgentFlow({ mob, onClose }) {
   const [scanning, setScanning] = useState(false);
   const [phase, setPhase] = useState(-1);
   const [termLines, setTermLines] = useState([]);
-  const [inferred, setInferred] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [pipelineStep, setPipelineStep] = useState(0);
-  const [editField, setEditField] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
-  const [editValue, setEditValue] = useState("");
   const [showSpecs, setShowSpecs] = useState(false);
   const termRef = useCallback(
     (node) => {
@@ -4711,205 +4708,6 @@ function NewAgentFlow({ mob, onClose }) {
     [termLines],
   );
 
-  const inferFromImage = (uri) => {
-    const name = uri
-      .split("/")
-      .pop()
-      .split(":")[0]
-      .replace(/[-_]/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase())
-      .replace(/\s/g, "");
-    const tag = uri.includes(":") ? uri.split(":").pop() : "latest";
-    const isAIO = /aio|overview|citation|schema|entity|content.?mesh/i.test(uri);
-    const isBoth = /pro|enterprise|full|dual/i.test(uri);
-    const verts = isBoth ? ["SEO", "AIO"] : isAIO ? ["AIO"] : ["SEO"];
-    const seoCaps = [
-      {
-        name: "crawl_site",
-        domain: "SEO",
-        description: "Deep site crawl with Core Web Vitals",
-        triggers: ["technical-seo", "crawl"],
-        tags: ["crawl", "cwv"],
-      },
-      {
-        name: "audit_technical",
-        domain: "SEO",
-        description: "Lighthouse-driven audit with fix recommendations",
-        triggers: ["technical-audit", "lighthouse"],
-        tags: ["audit", "lighthouse"],
-      },
-      {
-        name: "optimize_onpage",
-        domain: "SEO",
-        description: "Title, meta, and content structure optimization",
-        triggers: ["on-page", "meta-tags"],
-        tags: ["onpage", "meta"],
-      },
-      {
-        name: "track_rankings",
-        domain: "SEO",
-        description: "SERP position monitoring",
-        triggers: ["rank-tracking", "serp-monitoring"],
-        tags: ["rankings", "serp"],
-      },
-      {
-        name: "build_links",
-        domain: "SEO",
-        description: "Outreach-based backlink acquisition",
-        triggers: ["link-building", "backlinks"],
-        tags: ["links", "outreach"],
-      },
-    ];
-    const aioCaps = [
-      {
-        name: "restructure_content",
-        domain: "AIO",
-        description: "Rewrite content for AI-friendly extraction",
-        triggers: ["content-restructuring", "ai-optimization"],
-        tags: ["content", "ai-friendly"],
-      },
-      {
-        name: "implement_schema",
-        domain: "AIO",
-        description: "Deploy FAQ, HowTo, and custom schema markup",
-        triggers: ["schema-markup", "structured-data"],
-        tags: ["schema", "jsonld"],
-      },
-      {
-        name: "monitor_aio",
-        domain: "AIO",
-        description: "Track AI Overview appearances and citation status",
-        triggers: ["aio-monitoring", "citation-tracking"],
-        tags: ["monitoring", "aio"],
-      },
-      {
-        name: "optimize_entities",
-        domain: "AIO",
-        description: "Entity resolution and knowledge graph alignment",
-        triggers: ["entity-resolution", "knowledge-graph"],
-        tags: ["entities", "knowledge-graph"],
-      },
-    ];
-    let caps = [];
-    let tls = [];
-    let inF;
-    let outF;
-    let evals;
-    if (verts.includes("SEO")) {
-      caps.push(...seoCaps.slice(0, 3 + Math.floor(Math.random() * 2)));
-      tls.push("web_crawler", "lighthouse_api", "serp_tracker", "content_analyzer");
-    }
-    if (verts.includes("AIO")) {
-      caps.push(...aioCaps.slice(0, 2 + Math.floor(Math.random() * 2)));
-      tls.push("schema_validator", "aio_monitor", "knowledge_graph_api", "cms_writer");
-    }
-    tls = [...new Set(tls)];
-    inF = verts.includes("SEO")
-      ? ["target_url", "keywords[]", "competitor_urls[]", "geo_target", "budget_cap"]
-      : ["target_queries[]", "content_urls[]", "citation_goals", "schema_preferences", "budget_cap"];
-    outF = verts.includes("SEO")
-      ? ["audit_report", "ranking_changes[]", "lighthouse_scores", "action_log"]
-      : ["restructured_content[]", "schema_deployments[]", "aio_appearances[]", "citation_report"];
-    const p50 = (2 + Math.random() * 8).toFixed(1);
-    const cost = (80 + Math.random() * 400).toFixed(0);
-    evals = verts.includes("SEO")
-      ? [
-          { metric: "Lighthouse improvement", target: "+15pts avg" },
-          { metric: "Keyword top-10 placement", target: "≥5 in 12wk" },
-          { metric: "Budget adherence", target: "≤105% of cap" },
-        ]
-      : [
-          { metric: "AIO appearance rate", target: "≥3 queries in 16wk" },
-          { metric: "Schema validation", target: "100% valid markup" },
-          { metric: "Citation accuracy", target: "0 hallucinated" },
-        ];
-    const dis = verts.includes("SEO")
-      ? ["PII collection", "Cloaking", "Link spam", "Keyword stuffing"]
-      : ["Hallucinated citations", "Schema spam", "Content duplication", "Copyright infringement"];
-    return {
-      name,
-      version: tag === "latest" ? "1.0.0" : tag,
-      verticals: verts,
-      description: `Auto-discovered agent from ${uri}. ${caps.length} capabilities across ${verts.join(" + ")}. ${tls.length} tool dependencies.`,
-      capabilities: caps,
-      tools: tls,
-      inputFields: inF,
-      outputFields: outF,
-      sla: {
-        latencyP50: `${p50}s`,
-        latencyP99: `${(parseFloat(p50) * 2.5).toFixed(0)}s`,
-        maxCost: `$${cost}/run`,
-        retryPolicy: "3x exp backoff",
-        supportWindow: "24/7 auto",
-        uptime: "99.5%",
-      },
-      disallowed: dis,
-      dataRetention: "30d encrypted at rest",
-      sandbox: "Network-restricted, allowlisted domains",
-      evalClaims: evals,
-    };
-  };
-
-  useEffect(() => {
-    if (!scanning || phase >= SCAN_PHASES.length) return;
-    if (phase === -1) {
-      setPhase(0);
-      return;
-    }
-    const sp = SCAN_PHASES[phase];
-    const baseLines = sp.lines(imageUri);
-    let extra = [];
-    if (inferred) {
-      if (sp.id === "manifest")
-        extra = [
-          `  name: "${inferred.name}"`,
-          `  version: "${inferred.version}"`,
-          `  verticals: [${inferred.verticals.join(", ")}]`,
-        ];
-      else if (sp.id === "capabilities")
-        extra = inferred.capabilities.map((c) => `  @capability ${c.name} [${c.domain}]`);
-      else if (sp.id === "schemas")
-        extra = [
-          `  input: { ${inferred.inputFields.join(", ")} }`,
-          `  output: { ${inferred.outputFields.join(", ")} }`,
-        ];
-      else if (sp.id === "tools") extra = inferred.tools.map((t) => `  ✓ ${t}`);
-      else if (sp.id === "sla")
-        extra = [`  P50: ${inferred.sla.latencyP50}  P99: ${inferred.sla.latencyP99}  Max: ${inferred.sla.maxCost}`];
-      else if (sp.id === "policy") extra = inferred.disallowed.map((d) => `  ⊘ ${d}`);
-      else if (sp.id === "eval") extra = inferred.evalClaims.map((c) => `  ◆ ${c.metric}: ${c.target}`);
-    }
-    const allLines = [...baseLines, ...extra];
-    let idx = 0;
-    const timers = [];
-    const add = () => {
-      if (idx < allLines.length) {
-        const l = allLines[idx];
-        setTermLines((p) => [
-          ...p,
-          { text: l, type: l.startsWith("$") ? "cmd" : l.includes("✓") ? "ok" : l.includes("⊘") ? "warn" : "info" },
-        ]);
-        idx++;
-        timers.push(setTimeout(add, 35 + Math.random() * 65));
-      } else {
-        setTermLines((p) => [...p, { text: `── ${sp.label}: done ──`, type: "sep" }]);
-        timers.push(setTimeout(() => setPhase((p) => p + 1), 250));
-      }
-    };
-    add();
-    return () => timers.forEach(clearTimeout);
-  }, [scanning, phase]);
-
-  useEffect(() => {
-    if (phase >= SCAN_PHASES.length && scanning) {
-      setTermLines((p) => [
-        ...p,
-        { text: "", type: "info" },
-        { text: "Manifest fully inferred. Ready for review.", type: "ok" },
-      ]);
-      setScanning(false);
-    }
-  }, [phase]);
   useEffect(() => {
     if (submitted && pipelineStep < PIPELINE_STAGES.length) {
       const t = setTimeout(() => setPipelineStep((p) => p + 1), 1200 + pipelineStep * 400);
@@ -4917,12 +4715,32 @@ function NewAgentFlow({ mob, onClose }) {
     }
   }, [submitted, pipelineStep]);
 
-  const startScan = () => {
+  const startScan = async () => {
     if (!imageUri.trim()) return;
-    setInferred(inferFromImage(imageUri));
-    setTermLines([]);
-    setPhase(-1);
     setScanning(true);
+    setTermLines([]);
+    setPhase(0);
+
+    for (let i = 0; i < SCAN_PHASES.length; i++) {
+      const sp = SCAN_PHASES[i];
+      setPhase(i);
+      setTermLines((p) => [...p, { text: `$ ap scan --phase=${sp.id} ${imageUri}`, type: "cmd" }]);
+      await new Promise((r) => setTimeout(r, 150));
+      setTermLines((p) => [...p, { text: `  ${sp.label}...`, type: "info" }]);
+      await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
+      setTermLines((p) => [...p, { text: `  ✓ ${sp.label}: pass`, type: "ok" }]);
+      setTermLines((p) => [...p, { text: `── ${sp.label}: done ──`, type: "sep" }]);
+    }
+
+    setPhase(SCAN_PHASES.length);
+    setTermLines((p) => [
+      ...p,
+      { text: "", type: "info" },
+      { text: "Scan complete. Use the CLI for full results:", type: "ok" },
+      { text: "  $ ap scan " + imageUri, type: "info" },
+      { text: "  $ ap publish", type: "info" },
+    ]);
+    setScanning(false);
   };
   const scanDone = !scanning && phase >= SCAN_PHASES.length;
   const tCol = {
@@ -4966,9 +4784,7 @@ function NewAgentFlow({ mob, onClose }) {
             ✓
           </div>
           <h2 style={{ fontFamily: ft.display, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agent Submitted</h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,.35)" }}>
-            <strong style={{ color: blue }}>{inferred?.name}</strong> is entering the ingestion pipeline.
-          </p>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.35)" }}>Your agent is entering the ingestion pipeline.</p>
           <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
             {imageUri}
           </div>
@@ -5365,7 +5181,7 @@ function NewAgentFlow({ mob, onClose }) {
             </Card>
           )}
 
-          {inferred && scanDone && (
+          {scanDone && (
             <Card mob={mob} style={{ marginBottom: 14 }}>
               <div
                 style={{
@@ -5377,241 +5193,48 @@ function NewAgentFlow({ mob, onClose }) {
                   gap: 8,
                 }}
               >
-                <h3 style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, margin: 0 }}>Inferred Manifest</h3>
-                <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>
-                  click any section to override
-                </span>
+                <h3 style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, margin: 0 }}>Publish via CLI</h3>
               </div>
               <div
                 style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  marginBottom: 16,
-                  padding: 12,
-                  background: "rgba(66,165,245,.02)",
+                  padding: 16,
+                  background: "rgba(0,0,0,.3)",
                   borderRadius: 10,
-                  border: "1px solid rgba(66,165,245,.06)",
+                  border: "1px solid rgba(66,165,245,.08)",
+                  marginBottom: 14,
                 }}
               >
                 <div
                   style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 10,
-                    background: `linear-gradient(135deg, ${blueDeep}40, ${blue}25)`,
-                    border: "1px solid rgba(66,165,245,.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     fontFamily: ft.mono,
-                    fontSize: 14,
+                    fontSize: 10,
                     fontWeight: 700,
-                    color: blue,
-                    flexShrink: 0,
+                    color: "rgba(255,255,255,.25)",
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    marginBottom: 10,
                   }}
                 >
-                  {inferred.name.slice(0, 2).toUpperCase()}
+                  Full Agent Onboarding
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700 }}>{inferred.name}</span>
-                    {inferred.verticals.map((v) => (
-                      <VBadge key={v} v={v} />
-                    ))}
-                    <Badge color={blue} bg="rgba(66,165,245,.08)">
-                      hosted
-                    </Badge>
-                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.13)" }}>
-                      v{inferred.version}
+                {[
+                  { cmd: "ap init", desc: "Scaffold agent.manifest.json" },
+                  { cmd: "ap inspect", desc: "Analyze repo (no Docker needed)" },
+                  { cmd: `ap scan ${imageUri}`, desc: "Full 10-phase pipeline with malware detection" },
+                  { cmd: "ap publish", desc: "Scan → push → register on marketplace" },
+                ].map((step, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, alignItems: "baseline" }}>
+                    <span style={{ fontFamily: ft.mono, fontSize: 11, color: blue, whiteSpace: "nowrap" }}>
+                      $ {step.cmd}
                     </span>
+                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>{step.desc}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", marginTop: 2 }}>
-                    {inferred.description}
-                  </div>
-                </div>
+                ))}
               </div>
-              {[
-                {
-                  key: "capabilities",
-                  title: "Capabilities",
-                  color: blue,
-                  items: inferred.capabilities.map((c) => `${c.name} [${c.domain}]`),
-                  icon: "⟐",
-                },
-                { key: "inputFields", title: "Input Schema", color: "#FFA726", items: inferred.inputFields, icon: "⬡" },
-                {
-                  key: "outputFields",
-                  title: "Output Schema",
-                  color: "#66BB6A",
-                  items: inferred.outputFields,
-                  icon: "⬡",
-                },
-                { key: "tools", title: "Tool Dependencies", color: blue, items: inferred.tools, icon: "◈" },
-                {
-                  key: "sla",
-                  title: "SLA Benchmarks",
-                  color: "#AB47BC",
-                  items: Object.entries(inferred.sla).map(([k, v]) => `${k}: ${v}`),
-                  icon: "◎",
-                },
-                {
-                  key: "disallowed",
-                  title: "Disallowed Actions",
-                  color: "#EF5350",
-                  items: inferred.disallowed,
-                  icon: "⊘",
-                },
-                {
-                  key: "evalClaims",
-                  title: "Eval Claims",
-                  color: "#66BB6A",
-                  items: inferred.evalClaims.map((c) => `${c.metric} → ${c.target}`),
-                  icon: "✓",
-                },
-              ].map((sec) => (
-                <div
-                  key={sec.key}
-                  onClick={() => {
-                    if (editField !== sec.key) {
-                      setEditField(sec.key);
-                      setEditValue(sec.items.join("\n"));
-                    }
-                  }}
-                  style={{
-                    marginBottom: 8,
-                    padding: "10px 14px",
-                    background: editField === sec.key ? "rgba(66,165,245,.03)" : "rgba(255,255,255,.01)",
-                    border: `1px solid ${editField === sec.key ? "rgba(66,165,245,.15)" : "rgba(255,255,255,.03)"}`,
-                    borderRadius: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <div
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}
-                  >
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 12, opacity: 0.5 }}>{sec.icon}</span>
-                      <span
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: sec.color,
-                          letterSpacing: ".08em",
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {sec.title}
-                      </span>
-                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>
-                        {sec.items.length}
-                      </span>
-                    </div>
-                    {editField === sec.key ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditField(null);
-                        }}
-                        style={{
-                          fontFamily: ft.mono,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: "#66BB6A",
-                          background: "rgba(102,187,106,.06)",
-                          border: "1px solid rgba(102,187,106,.12)",
-                          borderRadius: 5,
-                          padding: "3px 10px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        Done
-                      </button>
-                    ) : (
-                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.1)" }}>edit ›</span>
-                    )}
-                  </div>
-                  {editField === sec.key ? (
-                    <textarea
-                      value={editValue}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      rows={Math.min(8, sec.items.length + 1)}
-                      style={{
-                        width: "100%",
-                        fontFamily: ft.mono,
-                        fontSize: 11,
-                        background: "rgba(0,0,0,.25)",
-                        border: "1px solid rgba(66,165,245,.1)",
-                        borderRadius: 6,
-                        padding: "8px 10px",
-                        color: "rgba(255,255,255,.5)",
-                        outline: "none",
-                        resize: "vertical",
-                        lineHeight: 1.8,
-                      }}
-                    />
-                  ) : (
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {sec.items.slice(0, mob ? 4 : 8).map((item, j) => (
-                        <span
-                          key={j}
-                          style={{
-                            fontFamily: ft.mono,
-                            fontSize: 10,
-                            padding: "3px 9px",
-                            background: "rgba(255,255,255,.02)",
-                            border: "1px solid rgba(66,165,245,.05)",
-                            borderRadius: 5,
-                            color: "rgba(255,255,255,.35)",
-                          }}
-                        >
-                          {item}
-                        </span>
-                      ))}
-                      {sec.items.length > (mob ? 4 : 8) && (
-                        <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.12)" }}>
-                          +{sec.items.length - (mob ? 4 : 8)}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                <button
-                  onClick={onClose}
-                  style={{
-                    fontFamily: ft.mono,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: "rgba(255,255,255,.3)",
-                    background: "rgba(255,255,255,.03)",
-                    border: "1px solid rgba(255,255,255,.06)",
-                    padding: "10px 18px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => setSubmitted(true)}
-                  style={{
-                    fontFamily: ft.display,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: "linear-gradient(135deg, #1B5E20, #66BB6A)",
-                    border: "none",
-                    padding: "10px 28px",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                  }}
-                >
-                  Confirm & Submit →
-                </button>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.3)", lineHeight: 1.6 }}>
+                The CLI runs a real 10-phase Docker scan including malware detection, SLA benchmarking, and policy
+                compliance. Agents that pass are published with <span style={{ color: blue }}>status: evaluation</span>{" "}
+                and enter the review pipeline.
               </div>
             </Card>
           )}

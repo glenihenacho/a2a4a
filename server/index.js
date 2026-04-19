@@ -56,6 +56,7 @@ import { agentOpsRoutes } from "./agent-ops/routes.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { SCAN_PHASES, WRAPPER_SPEC, PIPELINE_STAGES, STATUS_CFG } from "../cli/shared/constants.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -457,61 +458,6 @@ const TRENDING_UP = [
   { query: "SaaS startup needs to rank for CRM searches", delta: "+98%", vol: "89K" },
   { query: "solar installer needs AI overview placement", delta: "+136%", vol: "52K" },
 ];
-
-const WRAPPER_SPEC = {
-  input: [
-    { field: "intent", type: "IntentSpec", desc: "Target query, vertical, goals, success criteria" },
-    { field: "constraints", type: "Constraints", desc: "Budget cap, time limit, geo scope, compliance rules" },
-    { field: "context_pack", type: "ContextPack", desc: "Prior artifacts, competitor data, account history" },
-    { field: "allowed_tools", type: "ToolRef[]", desc: "Allowlisted tool IDs the agent may invoke" },
-    { field: "budget", type: "BudgetEnvelope", desc: "Hard ceiling with per-tool sub-allocations" },
-  ],
-  output: [
-    { field: "artifacts[]", type: "Artifact[]", desc: "Reports, code, content, schema deployments" },
-    { field: "metrics", type: "RunMetrics", desc: "Latency, cost breakdown, quality signals" },
-    { field: "receipts[]", type: "Receipt[]", desc: "Cryptographic proof of each tool invocation" },
-    { field: "status", type: "RunStatus", desc: "completed | failed | checkpoint | cancelled" },
-    { field: "traces", type: "TraceLog", desc: "Deterministic trace for replay and audit" },
-  ],
-  responsibilities: [
-    { label: "Format Translation", desc: "Marketplace job → agent-native format", icon: "⟐" },
-    { label: "Budget Enforcement", desc: "Hard caps on spend + per-tool sub-limits", icon: "◈" },
-    { label: "Tool Allowlist", desc: "Proxy layer restricting tool access", icon: "⊡" },
-    { label: "Structured Telemetry", desc: "Real-time events for monitoring & billing", icon: "◉" },
-    { label: "Checkpointing", desc: "Deterministic resume points for retry", icon: "⊞" },
-    { label: "Artifact Schema", desc: "Outputs conform to standard RunResult", icon: "⬡" },
-  ],
-};
-
-const SCAN_PHASES = [
-  { id: "pull", label: "Pulling image" },
-  { id: "inspect", label: "Inspecting container" },
-  { id: "manifest", label: "Parsing manifest" },
-  { id: "capabilities", label: "Discovering capabilities" },
-  { id: "schemas", label: "Inferring I/O schemas" },
-  { id: "tools", label: "Detecting tool dependencies" },
-  { id: "sla", label: "Benchmarking SLA" },
-  { id: "policy", label: "Policy compliance scan" },
-  { id: "eval", label: "Extracting eval claims" },
-  { id: "wrap", label: "Wrapping agent" },
-];
-
-const PIPELINE_STAGES = [
-  { label: "Image Pulled", desc: "Container downloaded and verified" },
-  { label: "Manifest Inferred", desc: "Capabilities, schemas, tools auto-discovered" },
-  { label: "Wrapper Integrated", desc: "Sandbox provisioned, telemetry connected" },
-  { label: "Sandbox Testing", desc: "Test JobSpecs validate end-to-end I/O" },
-  { label: "Evaluation Run", desc: "Benchmark jobs verify claimed metrics" },
-  { label: "Review & Approval", desc: "Compliance, telemetry, threshold checks" },
-  { label: "Live on Marketplace", desc: "Published, routable, monitored" },
-];
-
-const STATUS_CFG = {
-  bidding: { label: "Bidding", color: "#FFA726", bg: "rgba(255,167,38,.1)" },
-  engaged: { label: "Engaged", color: "#42A5F5", bg: "rgba(66,165,245,.1)" },
-  milestone: { label: "In Progress", color: "#64B5F6", bg: "rgba(100,181,246,.1)" },
-  completed: { label: "Completed", color: "#78909C", bg: "rgba(120,144,156,.1)" },
-};
 
 // ─── AGENTS ───
 
@@ -1665,6 +1611,146 @@ app.put("/api/routing-policies/:id", requireAuth, async (c) => {
 // Separate from /api/metrics (business dashboard data).
 
 app.get("/metrics", metricsHandler);
+
+// ─── CLI API ───
+
+app.post("/api/cli/token", async (c) => {
+  const body = await c.req.json();
+  const { email, password } = body;
+  if (!email || !password) return c.json({ error: "email and password required" }, 400);
+
+  try {
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    const ctx = await auth.api.signInEmail({ body: { email, password }, headers });
+    if (!ctx || !ctx.token) return c.json({ error: "Invalid credentials" }, 401);
+    const usr = ctx.user;
+    return c.json({
+      token: ctx.token,
+      email: usr.email,
+      role: usr.role,
+      userId: usr.id,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+  } catch (err) {
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
+});
+
+app.post("/api/cli/publish", async (c) => {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+  if (session.user.role !== "builder") return c.json({ error: "Builder role required" }, 403);
+
+  const body = await c.req.json();
+  const { manifest, imageUri, imageDigest, imageSizeBytes } = body;
+
+  if (!manifest || !manifest.name) return c.json({ error: "Valid manifest required" }, 400);
+
+  const agentId = `agt-${Date.now().toString(36)}`;
+
+  if (isDbAvailable()) {
+    try {
+      await db.insert(schema.agents).values({
+        id: agentId,
+        createdBy: session.user.id,
+        name: manifest.name,
+        avatar: manifest.name.slice(0, 2).toUpperCase(),
+        version: manifest.version || "1.0.0",
+        verified: false,
+        status: "evaluation",
+        verticals: manifest.verticals || ["SEO"],
+        description: manifest.description || "",
+        capabilities: manifest.capabilities || [],
+        inputSchema: manifest.inputSchema || { fields: [], version: "1.0" },
+        outputSchema: manifest.outputSchema || { fields: [], version: "1.0" },
+        toolRequirements: manifest.toolRequirements || [],
+        sla: manifest.sla || {},
+        policy: manifest.policy || {},
+        evalClaims: manifest.evalClaims || [],
+        totalRuns: 0,
+        successRate: 0,
+        avgRuntime: "0s",
+        avgCost: "$0",
+        activeContracts: 0,
+        reputation: 0,
+        monthlyRev: 0,
+        avgRoi: 0,
+        wins: 0,
+        imageUri: imageUri || null,
+        imageDigest: imageDigest || null,
+        imageSizeBytes: imageSizeBytes || null,
+      });
+
+      const capResults = [];
+      for (const cap of manifest.capabilities || []) {
+        try {
+          const result = await upsertCapability({
+            name: cap.name,
+            intentDomains: cap.triggers || [],
+            inputSchema: cap.inputSchema || null,
+            outputSchema: cap.outputSchema || null,
+            agentId,
+          });
+          capResults.push({ id: result.id, name: cap.name });
+        } catch { /* skip failed capability upserts */ }
+      }
+
+      return c.json({ agentId, status: "evaluation", capabilities: capResults });
+    } catch (err) {
+      return c.json({ error: `Database error: ${err.message}` }, 500);
+    }
+  }
+
+  return c.json({
+    agentId,
+    status: "evaluation",
+    capabilities: (manifest.capabilities || []).map((cap, i) => ({ id: `cap-${i}`, name: cap.name })),
+  });
+});
+
+app.get("/api/cli/status/:agentId", async (c) => {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+
+  const { agentId } = c.req.param();
+
+  if (isDbAvailable()) {
+    try {
+      const rows = await db.select().from(schema.agents).where(eq(schema.agents.id, agentId));
+      if (rows.length === 0) return c.json({ error: "Agent not found" }, 404);
+      const r = rows[0];
+      return c.json(reshapeAgent(r));
+    } catch (err) {
+      return c.json({ error: err.message }, 500);
+    }
+  }
+
+  return c.json({ error: "Database unavailable" }, 503);
+});
+
+app.post("/api/cli/scan-report", async (c) => {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  if (!session?.user) return c.json({ error: "Unauthorized" }, 401);
+
+  const body = await c.req.json();
+  const { agentId, scanReport } = body;
+
+  if (!agentId || !scanReport) return c.json({ error: "agentId and scanReport required" }, 400);
+
+  if (isDbAvailable()) {
+    try {
+      await db.update(schema.agents)
+        .set({ scanReport })
+        .where(eq(schema.agents.id, agentId));
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ error: err.message }, 500);
+    }
+  }
+
+  return c.json({ ok: true });
+});
 
 // ─── HEALTH ───
 
