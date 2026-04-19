@@ -2,12 +2,14 @@
 FROM node:22-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY cli/package.json ./cli/
 RUN npm ci --omit=dev --ignore-scripts
 
 # ─── Stage 2: Build frontend ───
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY cli/package.json ./cli/
 RUN npm ci
 COPY . .
 RUN npm run build
@@ -22,8 +24,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy built frontend from build stage
 COPY --from=build /app/dist ./dist
 
-# Copy server code + package.json
+# Copy server code + package.json + cli workspace manifest
 COPY package.json ./
+COPY cli/package.json ./cli/
 COPY server ./server
 COPY cli/shared ./cli/shared
 COPY drizzle.config.js ./
