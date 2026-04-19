@@ -163,10 +163,6 @@ export async function transitionCapability(id, status) {
   return postJson(`/capabilities/${id}/transition`, { status });
 }
 
-export async function ingestAgentAsCapability(agentId) {
-  return postJson(`/capabilities/ingest-agent/${agentId}`, {});
-}
-
 // ─── CAPABILITY VERSIONS ───
 
 export async function createCapabilityVersion(data) {

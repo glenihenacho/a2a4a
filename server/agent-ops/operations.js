@@ -1,11 +1,9 @@
 import { eq, and, desc, ne } from "drizzle-orm";
-import { ingestSkill } from "../memory/ingest.js";
 import {
   upsertCapability,
   listCapabilities,
   transitionCapabilityStatus,
   createCapabilityVersion,
-  ingestAgentAsCapability,
 } from "../memory/registry.js";
 import { getOutcomeSummary } from "../adaptation/writeback.js";
 import { executeCapability } from "../execution/executor.js";
@@ -67,34 +65,43 @@ export async function opAdd(db, schema, { agentId, userId }) {
     throw new Error(`Agent ${agentId} is ${agent.status}, cannot add`);
   }
 
-  const capResult = await ingestAgentAsCapability(db, schema, agentId);
-
-  const skillResults = [];
+  const capabilityIds = [];
+  const derivedDomains = new Set();
+  const errors = [];
   const capabilities = agent.capabilities || [];
+
   for (const cap of Array.isArray(capabilities) ? capabilities : [capabilities]) {
     if (!cap) continue;
-    const skillDef = {
-      name: `${agent.name}:${cap.name}`,
-      description: cap.description,
-      triggers: cap.triggers || [],
-      tags: cap.tags || [],
-      intentDomains: [cap.domain, ...(cap.triggers || [])].filter(Boolean),
-      inputSchema: cap.inputSchema || agent.inputSchema,
-      outputSchema: cap.outputSchema || agent.outputSchema,
-      status: "draft",
-    };
+    const intentDomains = [cap.domain, ...(cap.triggers || [])].filter(Boolean);
+    intentDomains.forEach((d) => derivedDomains.add(d));
+
     try {
-      const result = await ingestSkill(db, schema, skillDef);
-      skillResults.push(result);
+      const result = await upsertCapability(db, schema, {
+        name: `${agent.name}:${cap.name}`,
+        sourceKey: `agent:${agentId}:${cap.name}`,
+        providerType: "skill",
+        agentId,
+        status: "draft",
+        intentDomains,
+        inputSchema: cap.inputSchema || agent.inputSchema,
+        outputSchema: cap.outputSchema || agent.outputSchema,
+        preconditions: { requires: agent.toolRequirements || [] },
+        securityScope: { policy: agent.policy },
+        costModel: { avgCost: agent.avgCost },
+        latencyProfile: { avgRuntime: agent.avgRuntime, sla: agent.sla },
+      });
+      capabilityIds.push(result.id);
     } catch (err) {
-      skillResults.push({ error: err.message, skillName: skillDef.name });
+      errors.push({ capability: cap.name, error: err.message });
     }
   }
 
   const opResult = {
-    capabilityId: capResult.id,
-    skillsIngested: skillResults.filter((r) => !r.error).length,
-    skillsFailed: skillResults.filter((r) => r.error).length,
+    capabilityIds,
+    derivedDomains: [...derivedDomains],
+    ingested: capabilityIds.length,
+    failed: errors.length,
+    errors: errors.length > 0 ? errors : undefined,
   };
 
   await recordOp(db, schema, {
@@ -196,13 +203,20 @@ export async function opReview(db, schema, { agentId, userId }) {
       ),
     );
 
-  const competitorComparison = competitors.slice(0, 5).map((c) => ({
-    agentId: c.id,
-    name: c.name,
-    successRate: c.successRate,
-    avgCost: c.avgCost,
-    reputation: c.reputation,
-  }));
+  const competitorComparison = [];
+  for (const comp of competitors.slice(0, 5)) {
+    const compCaps = await listCapabilities(db, schema, { agentId: comp.id });
+    const compSummaries = [];
+    for (const cc of compCaps) {
+      const s = await getOutcomeSummary(db, schema, cc.id);
+      compSummaries.push({ capabilityId: cc.id, name: cc.name, ...s });
+    }
+    competitorComparison.push({
+      agentId: comp.id,
+      name: comp.name,
+      capabilities: compSummaries,
+    });
+  }
 
   const opResult = { capabilities: summaries, competitorComparison };
   await recordOp(db, schema, {
@@ -330,7 +344,7 @@ export async function opOptimize(db, schema, { agentId, userId }) {
 
 // ─── SCALE TIER OPERATIONS ($200/mo) ───
 
-export async function opTest(db, schema, { agentId, userId, testPayload }) {
+export async function opTest(db, schema, { agentId, userId, capabilityId, testPayload }) {
   const start = Date.now();
   const agent = await getAgent(db, schema, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
@@ -338,7 +352,15 @@ export async function opTest(db, schema, { agentId, userId, testPayload }) {
   const caps = await listCapabilities(db, schema, { agentId, status: "live" });
   if (caps.length === 0) throw new Error(`No live capabilities for agent ${agentId}`);
 
-  const cap = caps[0];
+  let cap;
+  if (capabilityId) {
+    cap = caps.find((c) => c.id === capabilityId);
+    if (!cap) throw new Error(`Capability ${capabilityId} not found for agent ${agentId}`);
+  } else if (caps.length === 1) {
+    cap = caps[0];
+  } else {
+    throw new Error(`Agent ${agentId} has ${caps.length} capabilities — specify capabilityId`);
+  }
   const sandboxVersion = await createCapabilityVersion(db, schema, {
     capabilityId: cap.id,
     versionTag: `test-${Date.now()}`,
@@ -582,7 +604,7 @@ export async function opShadow(db, schema, { agentId, userId, action, competitor
   return opResult;
 }
 
-export async function opCompile(db, schema, { agentId, userId, versionId }) {
+export async function opCompile(db, schema, { agentId, userId, capabilityId, versionId }) {
   const start = Date.now();
   const agent = await getAgent(db, schema, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
@@ -590,7 +612,16 @@ export async function opCompile(db, schema, { agentId, userId, versionId }) {
   const caps = await listCapabilities(db, schema, { agentId });
   if (caps.length === 0) throw new Error(`No capabilities for agent ${agentId}`);
 
-  const cap = caps[0];
+  let cap;
+  if (capabilityId) {
+    cap = caps.find((c) => c.id === capabilityId);
+    if (!cap) throw new Error(`Capability ${capabilityId} not found for agent ${agentId}`);
+  } else if (caps.length === 1) {
+    cap = caps[0];
+  } else {
+    throw new Error(`Agent ${agentId} has ${caps.length} capabilities — specify capabilityId`);
+  }
+
   const promoted = await promoteVersion(db, schema, cap.id, versionId);
 
   if (cap.status === "evaluating") {

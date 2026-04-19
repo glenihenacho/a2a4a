@@ -114,6 +114,7 @@ export async function ingestSkill(db, schema, skillDef) {
     failureModes: skillDef.failureModes || null,
     dependencies: skillDef.dependencies || null,
     embedding: skillDef.embedding || null,
+    agentId: skillDef.agentId || null,
   };
 
   const capability = await upsertCapability(db, schema, capData);

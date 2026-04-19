@@ -58,10 +58,12 @@ const updateSchema = z.object({
 });
 
 const testSchema = z.object({
+  capabilityId: z.string().max(32).optional(),
   testPayload: z.object({}).passthrough().nullable().optional(),
 });
 
 const compileSchema = z.object({
+  capabilityId: z.string().max(32).optional(),
   versionId: z.string().max(32),
 });
 
@@ -120,8 +122,8 @@ app.post("/:agentId/optimize", requireAgentExists, requireTier("optimize"), (c) 
 
 app.post("/:agentId/test", requireAgentExists, requireTier("test"), async (c) => {
   const body = await c.req.json().catch(() => ({}));
-  const { testPayload } = testSchema.parse(body);
-  return runOp(c, "test", opTest, { testPayload });
+  const { capabilityId, testPayload } = testSchema.parse(body);
+  return runOp(c, "test", opTest, { capabilityId, testPayload });
 });
 
 app.post("/:agentId/shadow", requireAgentExists, requireTier("shadow"), async (c) => {
@@ -132,8 +134,8 @@ app.post("/:agentId/shadow", requireAgentExists, requireTier("shadow"), async (c
 
 app.post("/:agentId/compile", requireAgentExists, requireTier("compile"), async (c) => {
   const body = await c.req.json();
-  const { versionId } = compileSchema.parse(body);
-  return runOp(c, "compile", opCompile, { versionId });
+  const { capabilityId, versionId } = compileSchema.parse(body);
+  return runOp(c, "compile", opCompile, { capabilityId, versionId });
 });
 
 // ─── OPERATION HISTORY ───

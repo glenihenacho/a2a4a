@@ -25,7 +25,6 @@ import {
   listCapabilities,
   getCapabilityWithVersions,
   recordMetricsWindow,
-  ingestAgentAsCapability,
   upsertCapability,
 } from "./memory/registry.js";
 import { ingestSkill, ingestSkillBatch } from "./memory/ingest.js";
@@ -1352,16 +1351,6 @@ app.post("/api/capabilities/:id/transition", requireAuth, async (c) => {
   try {
     const cap = await transitionCapabilityStatus(db, schema, c.req.param("id"), body.status);
     return c.json(cap);
-  } catch (err) {
-    return c.json({ error: err.message }, 400);
-  }
-});
-
-app.post("/api/capabilities/ingest-agent/:agentId", requireAuth, async (c) => {
-  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
-  try {
-    const cap = await ingestAgentAsCapability(db, schema, c.req.param("agentId"));
-    return c.json(cap, 201);
   } catch (err) {
     return c.json({ error: err.message }, 400);
   }
