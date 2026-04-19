@@ -54,6 +54,7 @@ import {
   audit,
   AuditEvent,
 } from "./observability/index.js";
+import { agentOpsRoutes } from "./agent-ops/routes.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1076,6 +1077,36 @@ app.post("/api/webhooks/stripe", requireDb, async (c) => {
       });
       break;
     }
+    case "customer.subscription.updated": {
+      const sub = event.data.object;
+      log.info(`Subscription updated: ${sub.id}`, { status: sub.status });
+      if (isDbAvailable()) {
+        await db
+          .update(schema.smbSubscriptions)
+          .set({
+            currentPeriodStart: new Date(sub.current_period_start * 1000),
+            currentPeriodEnd: new Date(sub.current_period_end * 1000),
+          })
+          .where(eq(schema.smbSubscriptions.stripeSubscriptionId, sub.id));
+      }
+      break;
+    }
+    case "customer.subscription.deleted": {
+      const sub = event.data.object;
+      log.info(`Subscription deleted: ${sub.id}`);
+      if (isDbAvailable()) {
+        await db
+          .update(schema.smbSubscriptions)
+          .set({ canceledAt: new Date(), tier: "free" })
+          .where(eq(schema.smbSubscriptions.stripeSubscriptionId, sub.id));
+      }
+      break;
+    }
+    case "invoice.payment_failed": {
+      const inv = event.data.object;
+      log.warn(`Invoice payment failed: ${inv.id}`, { subscription: inv.subscription });
+      break;
+    }
   }
 
   return c.json({ received: true });
@@ -1089,6 +1120,10 @@ app.get("/api/stripe/status", (c) => {
     platformFeePct: PLATFORM_FEE_PCT,
   });
 });
+
+// ─── AGENT OPERATIONS (sub-app) ───
+
+app.route("/api/agent-ops", agentOpsRoutes);
 
 // ─── METRICS ───
 

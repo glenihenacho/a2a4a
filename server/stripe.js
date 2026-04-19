@@ -83,6 +83,67 @@ export async function createAccountLink(accountId, refreshUrl, returnUrl) {
   });
 }
 
+// ─── SUBSCRIPTIONS (SMB tier gating) ───
+
+const TIER_PRICE_IDS = {
+  pro: process.env.STRIPE_PRICE_PRO || "price_pro_2000",
+  scale: process.env.STRIPE_PRICE_SCALE || "price_scale_20000",
+};
+
+export async function createCustomer(email, metadata) {
+  if (!stripe) {
+    return { id: `cus_sim_${Date.now()}`, email };
+  }
+  return stripe.customers.create({ email, metadata });
+}
+
+export async function createSubscription(customerId, tier) {
+  if (!stripe) {
+    return {
+      id: `sub_sim_${Date.now()}`,
+      customer: customerId,
+      status: "active",
+      items: { data: [{ price: { id: TIER_PRICE_IDS[tier] } }] },
+      current_period_start: Math.floor(Date.now() / 1000),
+      current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+    };
+  }
+  return stripe.subscriptions.create({
+    customer: customerId,
+    items: [{ price: TIER_PRICE_IDS[tier] }],
+    payment_behavior: "default_incomplete",
+    expand: ["latest_invoice.payment_intent"],
+  });
+}
+
+export async function cancelSubscription(subscriptionId) {
+  if (!stripe) {
+    return { id: subscriptionId, status: "canceled", canceled_at: Math.floor(Date.now() / 1000) };
+  }
+  return stripe.subscriptions.cancel(subscriptionId);
+}
+
+export async function getSubscription(subscriptionId) {
+  if (!stripe) {
+    return { id: subscriptionId, status: "active" };
+  }
+  return stripe.subscriptions.retrieve(subscriptionId);
+}
+
+// ─── MPP TRANSFERS (paid from SMB subscription pool) ───
+
+export async function createMppTransfer(amountCents, destinationAccountId, metadata) {
+  if (!stripe) {
+    return { id: `tr_mpp_sim_${Date.now()}`, amount: amountCents, destination: destinationAccountId };
+  }
+  return stripe.transfers.create({
+    amount: amountCents,
+    currency: "usd",
+    destination: destinationAccountId,
+    metadata: { ...metadata, source: "mpp" },
+  });
+}
+
 // ─── WEBHOOK VERIFICATION ───
 
 export function constructWebhookEvent(body, signature) {

@@ -15,5 +15,8 @@ export {
   escrowLockedTotal,
   escrowReleasedTotal,
   escrowRefundedTotal,
+  agentOpsTotal,
+  smbSubscriptionChangesTotal,
+  mppTransfersTotal,
 } from "./metrics.js";
 export { audit, AuditEvent } from "./audit.js";

@@ -104,6 +104,17 @@ export const userRoleEnum = pgEnum("user_role", ["smb", "builder"]);
 export const waitlistStatusEnum = pgEnum("waitlist_status", ["pending", "approved", "rejected"]);
 export const auditActorEnum = pgEnum("audit_actor_type", ["user", "system", "webhook", "agent"]);
 export const auditSeverityEnum = pgEnum("audit_severity", ["info", "warn", "critical"]);
+export const agentOpTypeEnum = pgEnum("agent_op_type", [
+  "add", "remove", "update", "review",
+  "suggest", "optimize",
+  "test", "shadow", "compile",
+]);
+export const subscriptionTierEnum = pgEnum("subscription_tier", [
+  "free", "pro", "scale",
+]);
+export const agentOpStatusEnum = pgEnum("agent_op_status", [
+  "pending", "running", "completed", "failed",
+]);
 
 // ─── AUTH TABLES (Better Auth) ───
 
@@ -680,3 +691,76 @@ export const escrow = pgTable("escrow", {
   refundedAt: timestamp("refunded_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ─── SMB SUBSCRIPTIONS ───
+
+export const smbSubscriptions = pgTable("smb_subscriptions", {
+  id: varchar("id", { length: 16 }).primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => user.id, { onDelete: "cascade" }),
+  tier: subscriptionTierEnum("tier").default("free").notNull(),
+  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 64 }),
+  stripeCustomerId: varchar("stripe_customer_id", { length: 64 }),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  canceledAt: timestamp("canceled_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+// ─── AGENT OPERATIONS (audit log) ───
+
+export const agentOperations = pgTable("agent_operations", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  agentId: varchar("agent_id", { length: 16 })
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .references(() => user.id, { onDelete: "set null" }),
+  operation: agentOpTypeEnum("operation").notNull(),
+  status: agentOpStatusEnum("status").default("pending").notNull(),
+  input: jsonb("input"),
+  result: jsonb("result"),
+  error: text("error"),
+  durationMs: integer("duration_ms"),
+  costCents: integer("cost_cents"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  index("agent_ops_agent_idx").on(table.agentId),
+  index("agent_ops_user_idx").on(table.userId),
+  index("agent_ops_op_idx").on(table.operation),
+  index("agent_ops_created_idx").on(table.createdAt),
+]);
+
+// ─── SHADOW SUBSCRIPTIONS ───
+
+export const shadowSubscriptions = pgTable("shadow_subscriptions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  agentId: varchar("agent_id", { length: 16 })
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  competitorAgentId: varchar("competitor_agent_id", { length: 16 })
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  addedBy: varchar("added_by", { length: 20 }).notNull(),
+  active: boolean("active").default(true).notNull(),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+  totalRuns: integer("total_runs").default(0).notNull(),
+  totalCostCents: integer("total_cost_cents").default(0).notNull(),
+  insights: jsonb("insights"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+}, (table) => [
+  index("shadow_subs_user_idx").on(table.userId),
+  index("shadow_subs_agent_idx").on(table.agentId),
+  index("shadow_subs_competitor_idx").on(table.competitorAgentId),
+]);

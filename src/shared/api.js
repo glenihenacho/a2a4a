@@ -282,3 +282,66 @@ export async function submitWaitlist(data) {
 export async function fetchWaitlistStats() {
   return fetchJson("/waitlist/stats");
 }
+
+// ─── AGENT OPERATIONS ───
+
+export async function agentOpAdd(agentId) {
+  return postJson(`/agent-ops/${agentId}/add`, {});
+}
+
+export async function agentOpRemove(agentId) {
+  return postJson(`/agent-ops/${agentId}/remove`, {});
+}
+
+export async function agentOpUpdate(agentId, updates) {
+  return postJson(`/agent-ops/${agentId}/update`, { updates });
+}
+
+export async function agentOpReview(agentId) {
+  return fetchJson(`/agent-ops/${agentId}/review`);
+}
+
+export async function agentOpSuggest(agentId) {
+  return postJson(`/agent-ops/${agentId}/suggest`, {});
+}
+
+export async function agentOpOptimize(agentId) {
+  return postJson(`/agent-ops/${agentId}/optimize`, {});
+}
+
+export async function agentOpTest(agentId, testPayload = null) {
+  return postJson(`/agent-ops/${agentId}/test`, { testPayload });
+}
+
+export async function agentOpShadow(agentId, action, competitorAgentId = null) {
+  return postJson(`/agent-ops/${agentId}/shadow`, { action, competitorAgentId });
+}
+
+export async function agentOpCompile(agentId, versionId) {
+  return postJson(`/agent-ops/${agentId}/compile`, { versionId });
+}
+
+export async function fetchAgentOperations(agentId) {
+  return fetchJson(`/agent-ops/${agentId}/operations`);
+}
+
+export async function fetchSmbSubscription() {
+  return fetchJson("/agent-ops/subscription");
+}
+
+export async function createSmbSubscription(tier) {
+  return postJson("/agent-ops/subscription", { tier });
+}
+
+export async function cancelSmbSubscription() {
+  const res = await fetch(`${API_BASE}/agent-ops/subscription`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`API DELETE /agent-ops/subscription: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchTierGates() {
+  return fetchJson("/agent-ops/tier-gates");
+}

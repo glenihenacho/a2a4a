@@ -79,6 +79,29 @@ export const escrowRefundedTotal = new Counter({
   registers: [register],
 });
 
+// ─── AGENT OPERATIONS METRICS ───
+
+export const agentOpsTotal = new Counter({
+  name: "ap_agent_ops_total",
+  help: "Total agent operations",
+  labelNames: ["operation", "status"],
+  registers: [register],
+});
+
+export const smbSubscriptionChangesTotal = new Counter({
+  name: "ap_smb_subscription_changes_total",
+  help: "Total SMB subscription changes",
+  labelNames: ["tier", "action"],
+  registers: [register],
+});
+
+export const mppTransfersTotal = new Counter({
+  name: "ap_mpp_transfers_total",
+  help: "Total MPP transfers",
+  labelNames: ["operation"],
+  registers: [register],
+});
+
 // ─── MIDDLEWARE ───
 
 export function metricsMiddleware() {
