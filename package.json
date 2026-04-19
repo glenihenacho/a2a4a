@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": ["cli"],
   "scripts": {
     "dev": "vite",
     "dev:server": "node server/index.js",
@@ -23,7 +24,8 @@
     "db:push": "drizzle-kit push",
     "db:seed": "node server/db/seed.js",
     "db:studio": "drizzle-kit studio",
-    "cli": "node bin/cli.js",
+    "admin": "node bin/admin.js",
+    "ap": "node cli/bin/ap.js",
     "prepare": "husky"
   },
   "lint-staged": {
