@@ -1685,7 +1685,7 @@ app.post("/api/cli/publish", async (c) => {
       const capResults = [];
       for (const cap of manifest.capabilities || []) {
         try {
-          const result = await upsertCapability({
+          const result = await upsertCapability(db, schema, {
             name: cap.name,
             intentDomains: cap.triggers || [],
             inputSchema: cap.inputSchema || null,
