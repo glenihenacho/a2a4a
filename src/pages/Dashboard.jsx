@@ -4695,10 +4695,19 @@ function NewAgentFlow({ mob, onClose }) {
   const [phase, setPhase] = useState(-1);
   const [termLines, setTermLines] = useState([]);
   const [submitted, setSubmitted] = useState(false);
-  const [pipelineStep, setPipelineStep] = useState(0);
+  const [publishError, setPublishError] = useState(null);
+  const [agentName, setAgentName] = useState("");
+  const [agentDesc, setAgentDesc] = useState("");
+  const [verticals, setVerticals] = useState(["SEO"]);
+  const [publishedId, setPublishedId] = useState(null);
+  const [scanResult, setScanResult] = useState(null);
+  const pollRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, []);
   const [showSpecs, setShowSpecs] = useState(false);
   const termRef = useCallback(
@@ -4708,18 +4717,45 @@ function NewAgentFlow({ mob, onClose }) {
     [termLines],
   );
 
-  useEffect(() => {
-    if (submitted && pipelineStep < PIPELINE_STAGES.length) {
-      const t = setTimeout(() => setPipelineStep((p) => p + 1), 1200 + pipelineStep * 400);
-      return () => clearTimeout(t);
-    }
-  }, [submitted, pipelineStep]);
+  const startPolling = (agentId) => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/agents/${agentId}/scan`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setScanResult(data);
+        if (data.status === "completed" || data.status === "failed") {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      } catch {
+        /* ignore poll errors */
+      }
+    }, 2000);
+  };
+
+  const inferName = (uri) => {
+    return uri
+      .split("/")
+      .pop()
+      .split(":")[0]
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const startScan = async () => {
     if (!imageUri.trim()) return;
     setScanning(true);
     setTermLines([]);
     setPhase(0);
+    setPublishError(null);
+
+    const name = inferName(imageUri);
+    setAgentName(name);
+    const isAIO = /aio|overview|citation|schema|entity|content.?mesh/i.test(imageUri);
+    const isBoth = /pro|enterprise|full|dual/i.test(imageUri);
+    setVerticals(isBoth ? ["SEO", "AIO"] : isAIO ? ["AIO"] : ["SEO"]);
+    setAgentDesc(`Agent from ${imageUri}`);
 
     for (let i = 0; i < SCAN_PHASES.length; i++) {
       const sp = SCAN_PHASES[i];
@@ -4733,15 +4769,53 @@ function NewAgentFlow({ mob, onClose }) {
     }
 
     setPhase(SCAN_PHASES.length);
-    setTermLines((p) => [
-      ...p,
-      { text: "", type: "info" },
-      { text: "Scan complete. Use the CLI for full results:", type: "ok" },
-      { text: "  $ ap scan " + imageUri, type: "info" },
-      { text: "  $ ap publish", type: "info" },
-    ]);
+    setTermLines((p) => [...p, { text: "", type: "info" }, { text: "Scan preview complete.", type: "ok" }]);
     setScanning(false);
   };
+
+  const handlePublish = async () => {
+    setPublishError(null);
+    const manifest = {
+      name: agentName,
+      version: imageUri.includes(":") ? imageUri.split(":").pop() : "1.0.0",
+      description: agentDesc,
+      verticals,
+      capabilities: [
+        {
+          name: agentName.toLowerCase().replace(/\s+/g, "_"),
+          domain: verticals[0],
+          description: agentDesc,
+          triggers: [agentName.toLowerCase().replace(/\s+/g, "-")],
+          tags: [],
+        },
+      ],
+      inputSchema: { fields: ["target_url", "keywords[]", "budget_cap"], version: "1.0" },
+      outputSchema: { fields: ["report", "metrics"], version: "1.0" },
+      toolRequirements: [],
+      sla: { latencyP50: "5s", latencyP99: "15s", maxCost: "$100/run", uptime: "99%" },
+      policy: { disallowed: [], dataRetention: "30d encrypted", sandbox: "Network-restricted" },
+      evalClaims: [],
+    };
+    try {
+      const res = await fetch("/api/cli/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ manifest, imageUri }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setPublishedId(data.agentId);
+      setSubmitted(true);
+      if (data.agentId) startPolling(data.agentId);
+    } catch (err) {
+      setPublishError(err.message);
+    }
+  };
+
   const scanDone = !scanning && phase >= SCAN_PHASES.length;
   const tCol = {
     cmd: "#FFA726",
@@ -4763,7 +4837,24 @@ function NewAgentFlow({ mob, onClose }) {
     outline: "none",
   };
 
-  if (submitted)
+  if (submitted) {
+    const phases = scanResult?.phases || SCAN_PHASES.map((sp) => ({ id: sp.id, status: "pending", output: [] }));
+    const scanStatus = scanResult?.status || "pending";
+    const summary = scanResult?.summary;
+    const statusIcon = scanStatus === "completed" ? "✓" : scanStatus === "failed" ? "✗" : "◎";
+    const statusBg =
+      scanStatus === "completed"
+        ? "rgba(102,187,106,.08)"
+        : scanStatus === "failed"
+          ? "rgba(239,83,80,.08)"
+          : "rgba(66,165,245,.08)";
+    const statusBorder =
+      scanStatus === "completed"
+        ? "rgba(102,187,106,.15)"
+        : scanStatus === "failed"
+          ? "rgba(239,83,80,.15)"
+          : "rgba(66,165,245,.15)";
+
     return (
       <div>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -4772,8 +4863,8 @@ function NewAgentFlow({ mob, onClose }) {
               width: 52,
               height: 52,
               borderRadius: 13,
-              background: "rgba(102,187,106,.08)",
-              border: "1px solid rgba(102,187,106,.15)",
+              background: statusBg,
+              border: `1px solid ${statusBorder}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -4781,66 +4872,159 @@ function NewAgentFlow({ mob, onClose }) {
               margin: "0 auto 12px",
             }}
           >
-            ✓
+            {statusIcon}
           </div>
-          <h2 style={{ fontFamily: ft.display, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agent Submitted</h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,.35)" }}>Your agent is entering the ingestion pipeline.</p>
+          <h2 style={{ fontFamily: ft.display, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+            {scanStatus === "completed" ? "Scan Complete" : scanStatus === "failed" ? "Scan Failed" : "Scanning Agent"}
+          </h2>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,.35)" }}>
+            <strong style={{ color: blue }}>{agentName}</strong>
+            {scanStatus === "completed"
+              ? " passed verification"
+              : scanStatus === "failed"
+                ? " has critical issues"
+                : " — running 10-phase pipeline"}
+          </p>
           <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
+            {publishedId && <span style={{ color: blue }}>{publishedId} · </span>}
             {imageUri}
           </div>
         </div>
         <Card mob={mob}>
-          {PIPELINE_STAGES.map((stage, i) => {
-            const done = i < pipelineStep;
-            const active = i === pipelineStep;
-            const c = done ? "#66BB6A" : active ? blue : "rgba(255,255,255,.12)";
+          {phases.map((ph, i) => {
+            const phaseSpec = SCAN_PHASES.find((s) => s.id === ph.id) || { label: ph.id };
+            const done = ph.status === "pass" || ph.status === "warn";
+            const failed = ph.status === "fail";
+            const skipped = ph.status === "skip";
+            const running =
+              ph.status === "running" ||
+              (scanStatus === "running" &&
+                ph.status === "pending" &&
+                i === phases.findIndex((p) => p.status === "pending"));
+            const color = done
+              ? ph.status === "warn"
+                ? "#FFA726"
+                : "#66BB6A"
+              : failed
+                ? "#EF5350"
+                : skipped
+                  ? "rgba(255,255,255,.12)"
+                  : running
+                    ? blue
+                    : "rgba(255,255,255,.12)";
+            const icon = done
+              ? ph.status === "warn"
+                ? "⚠"
+                : "✓"
+              : failed
+                ? "✗"
+                : skipped
+                  ? "—"
+                  : running
+                    ? "●"
+                    : `${i + 1}`;
             return (
-              <div key={i} style={{ display: "flex", gap: 14, marginBottom: 6, alignItems: "center" }}>
-                <div
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: "50%",
-                    border: `2px solid ${c}`,
-                    background: done ? "rgba(102,187,106,.1)" : "transparent",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    transition: "all .4s",
-                  }}
-                >
-                  {done ? (
-                    <span style={{ fontSize: 12, color: "#66BB6A" }}>✓</span>
-                  ) : (
-                    <span style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color: c }}>{i + 1}</span>
-                  )}
-                </div>
-                <div style={{ flex: 1 }}>
+              <div key={ph.id} style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div
                     style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: done ? "#66BB6A" : active ? "#E3F2FD" : "rgba(255,255,255,.2)",
-                      transition: "color .4s",
+                      width: 26,
+                      height: 26,
+                      borderRadius: "50%",
+                      border: `2px solid ${color}`,
+                      background: done ? "rgba(102,187,106,.1)" : failed ? "rgba(239,83,80,.1)" : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "all .4s",
                     }}
                   >
-                    {stage.label}
+                    <span style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color }}>{icon}</span>
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)" }}>{stage.desc}</div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: done
+                          ? ph.status === "warn"
+                            ? "#FFA726"
+                            : "#66BB6A"
+                          : failed
+                            ? "#EF5350"
+                            : running
+                              ? "#E3F2FD"
+                              : "rgba(255,255,255,.2)",
+                      }}
+                    >
+                      {phaseSpec.label}
+                    </div>
+                    {ph.durationMs > 0 && (
+                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)" }}>
+                        {ph.durationMs}ms
+                      </span>
+                    )}
+                  </div>
+                  {skipped && (
+                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)" }}>docker</span>
+                  )}
+                  {running && (
+                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: blue, animation: "blink 1s infinite" }}>
+                      scanning
+                    </span>
+                  )}
                 </div>
-                {active && (
-                  <span style={{ fontFamily: ft.mono, fontSize: 9, color: blue, animation: "blink 1s infinite" }}>
-                    processing
-                  </span>
+                {(done || failed) && ph.output && ph.output.length > 0 && (
+                  <div style={{ marginLeft: 40, marginTop: 2, marginBottom: 4 }}>
+                    {ph.output.slice(0, 3).map((line, j) => (
+                      <div
+                        key={j}
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 9,
+                          color: String(line).startsWith("?") ? "#FFA726" : "rgba(255,255,255,.2)",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {line}
+                      </div>
+                    ))}
+                    {ph.output.length > 3 && (
+                      <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.1)" }}>
+                        +{ph.output.length - 3} more
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );
           })}
+          {summary && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: "10px 14px",
+                background: "rgba(255,255,255,.02)",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,.04)",
+                display: "flex",
+                gap: 16,
+                fontFamily: ft.mono,
+                fontSize: 10,
+              }}
+            >
+              <span style={{ color: "#66BB6A" }}>Pass: {summary.pass}</span>
+              <span style={{ color: "#FFA726" }}>Warn: {summary.warn}</span>
+              <span style={{ color: "#EF5350" }}>Fail: {summary.fail}</span>
+              <span style={{ color: "rgba(255,255,255,.15)" }}>Skip: {summary.skip}</span>
+            </div>
+          )}
         </Card>
         <style>{`@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}`}</style>
       </div>
     );
+  }
 
   return (
     <div>
@@ -5193,48 +5377,186 @@ function NewAgentFlow({ mob, onClose }) {
                   gap: 8,
                 }}
               >
-                <h3 style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, margin: 0 }}>Publish via CLI</h3>
+                <h3 style={{ fontFamily: ft.display, fontSize: 18, fontWeight: 700, margin: 0 }}>Register Agent</h3>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {verticals.map((v) => (
+                    <VBadge key={v} v={v} />
+                  ))}
+                  <Badge color={blue} bg="rgba(66,165,245,.08)">
+                    evaluation
+                  </Badge>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: mob ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div>
+                  <label
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,.25)",
+                      letterSpacing: ".08em",
+                      textTransform: "uppercase",
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Agent Name
+                  </label>
+                  <input
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    style={{ ...inp, paddingLeft: 14 }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontFamily: ft.mono,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      color: "rgba(255,255,255,.25)",
+                      letterSpacing: ".08em",
+                      textTransform: "uppercase",
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  >
+                    Verticals
+                  </label>
+                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                    {["SEO", "AIO"].map((v) => (
+                      <button
+                        key={v}
+                        onClick={() =>
+                          setVerticals((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]))
+                        }
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: "8px 16px",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          border: verticals.includes(v)
+                            ? `1px solid ${v === "SEO" ? blue : "#AB47BC"}`
+                            : "1px solid rgba(255,255,255,.06)",
+                          background: verticals.includes(v)
+                            ? v === "SEO"
+                              ? "rgba(66,165,245,.1)"
+                              : "rgba(171,71,188,.1)"
+                            : "rgba(255,255,255,.02)",
+                          color: verticals.includes(v) ? (v === "SEO" ? blue : "#AB47BC") : "rgba(255,255,255,.25)",
+                        }}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 9,
+                    fontWeight: 700,
+                    color: "rgba(255,255,255,.25)",
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                    display: "block",
+                    marginBottom: 4,
+                  }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={agentDesc}
+                  onChange={(e) => setAgentDesc(e.target.value)}
+                  rows={2}
+                  style={{ ...inp, paddingLeft: 14, resize: "vertical", lineHeight: 1.6 }}
+                />
               </div>
               <div
                 style={{
-                  padding: 16,
-                  background: "rgba(0,0,0,.3)",
-                  borderRadius: 10,
-                  border: "1px solid rgba(66,165,245,.08)",
+                  padding: 12,
+                  background: "rgba(0,0,0,.2)",
+                  borderRadius: 8,
+                  border: "1px solid rgba(66,165,245,.06)",
                   marginBottom: 14,
                 }}
               >
                 <div
                   style={{
                     fontFamily: ft.mono,
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: 700,
-                    color: "rgba(255,255,255,.25)",
+                    color: "rgba(255,255,255,.2)",
                     letterSpacing: ".08em",
                     textTransform: "uppercase",
-                    marginBottom: 10,
+                    marginBottom: 6,
                   }}
                 >
-                  Full Agent Onboarding
+                  Or use the CLI for full Docker scan
                 </div>
-                {[
-                  { cmd: "ap init", desc: "Scaffold agent.manifest.json" },
-                  { cmd: "ap inspect", desc: "Analyze repo (no Docker needed)" },
-                  { cmd: `ap scan ${imageUri}`, desc: "Full 10-phase pipeline with malware detection" },
-                  { cmd: "ap publish", desc: "Scan → push → register on marketplace" },
-                ].map((step, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, alignItems: "baseline" }}>
-                    <span style={{ fontFamily: ft.mono, fontSize: 11, color: blue, whiteSpace: "nowrap" }}>
-                      $ {step.cmd}
-                    </span>
-                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.2)" }}>{step.desc}</span>
-                  </div>
-                ))}
+                <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.3)" }}>
+                  $ ap scan {imageUri} && ap publish
+                </div>
               </div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,.3)", lineHeight: 1.6 }}>
-                The CLI runs a real 10-phase Docker scan including malware detection, SLA benchmarking, and policy
-                compliance. Agents that pass are published with <span style={{ color: blue }}>status: evaluation</span>{" "}
-                and enter the review pipeline.
+              {publishError && (
+                <div
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 11,
+                    color: "#EF5350",
+                    padding: "8px 12px",
+                    background: "rgba(239,83,80,.06)",
+                    border: "1px solid rgba(239,83,80,.12)",
+                    borderRadius: 6,
+                    marginBottom: 14,
+                  }}
+                >
+                  {publishError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button
+                  onClick={onClose}
+                  style={{
+                    fontFamily: ft.mono,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: "rgba(255,255,255,.3)",
+                    background: "rgba(255,255,255,.03)",
+                    border: "1px solid rgba(255,255,255,.06)",
+                    padding: "10px 18px",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePublish}
+                  disabled={!agentName.trim() || verticals.length === 0}
+                  style={{
+                    fontFamily: ft.display,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: "#fff",
+                    background:
+                      agentName.trim() && verticals.length > 0
+                        ? "linear-gradient(135deg, #1B5E20, #66BB6A)"
+                        : "rgba(255,255,255,.06)",
+                    border: "none",
+                    padding: "10px 28px",
+                    borderRadius: 8,
+                    cursor: agentName.trim() && verticals.length > 0 ? "pointer" : "not-allowed",
+                    opacity: agentName.trim() && verticals.length > 0 ? 1 : 0.4,
+                  }}
+                >
+                  Publish Agent →
+                </button>
               </div>
             </Card>
           )}
