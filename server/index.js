@@ -57,6 +57,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SCAN_PHASES, WRAPPER_SPEC, PIPELINE_STAGES, STATUS_CFG } from "../cli/shared/constants.js";
+import { startScanWorker } from "./scanner.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1658,7 +1659,7 @@ app.post("/api/cli/publish", async (c) => {
         avatar: manifest.name.slice(0, 2).toUpperCase(),
         version: manifest.version || "1.0.0",
         verified: false,
-        status: "evaluation",
+        status: "pending_scan",
         verticals: manifest.verticals || ["SEO"],
         description: manifest.description || "",
         capabilities: manifest.capabilities || [],
@@ -1696,7 +1697,15 @@ app.post("/api/cli/publish", async (c) => {
         } catch { /* skip failed capability upserts */ }
       }
 
-      return c.json({ agentId, status: "evaluation", capabilities: capResults });
+      const scanId = `scan-${Date.now().toString(36)}`;
+      await db.insert(schema.agentScans).values({
+        id: scanId,
+        agentId,
+        status: "pending",
+        phases: [],
+      });
+
+      return c.json({ agentId, scanId, status: "pending_scan", capabilities: capResults });
     } catch (err) {
       return c.json({ error: `Database error: ${err.message}` }, 500);
     }
@@ -1704,7 +1713,7 @@ app.post("/api/cli/publish", async (c) => {
 
   return c.json({
     agentId,
-    status: "evaluation",
+    status: "pending_scan",
     capabilities: (manifest.capabilities || []).map((cap, i) => ({ id: `cap-${i}`, name: cap.name })),
   });
 });
@@ -1750,6 +1759,35 @@ app.post("/api/cli/scan-report", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+app.get("/api/agents/:agentId/scan", async (c) => {
+  const { agentId } = c.req.param();
+
+  if (!isDbAvailable()) return c.json({ error: "Database unavailable" }, 503);
+
+  try {
+    const scans = await db
+      .select()
+      .from(schema.agentScans)
+      .where(eq(schema.agentScans.agentId, agentId))
+      .orderBy(schema.agentScans.createdAt);
+
+    if (scans.length === 0) return c.json({ error: "No scan found" }, 404);
+
+    const latest = scans[scans.length - 1];
+    return c.json({
+      id: latest.id,
+      agentId: latest.agentId,
+      status: latest.status,
+      phases: latest.phases,
+      summary: latest.summary,
+      startedAt: latest.startedAt,
+      completedAt: latest.completedAt,
+    });
+  } catch (err) {
+    return c.json({ error: err.message }, 500);
+  }
 });
 
 // ─── HEALTH ───
@@ -1824,6 +1862,10 @@ if (isDirectRun) {
     console.log(`Hono API server running on http://${hostname}:${port}`);
     console.log(`Database: ${isDbAvailable() ? "connected" : "unavailable (frontend will use fallback data)"}`);
     await ensureDemoAccounts();
+    if (isDbAvailable()) {
+      startScanWorker(db, schema);
+      console.log("Scan worker started (5s poll interval)");
+    }
   });
 
   // ─── GRACEFUL SHUTDOWN ───

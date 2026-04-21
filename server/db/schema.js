@@ -55,6 +55,7 @@ export const outcomeVerdictEnum = pgEnum("outcome_verdict", [
 
 export const verticalEnum = pgEnum("vertical", ["SEO", "AIO"]);
 export const agentStatusEnum = pgEnum("agent_status", [
+  "pending_scan",
   "evaluation",
   "live",
   "suspended",
@@ -245,6 +246,32 @@ export const agents = pgTable("agents", {
     .defaultNow()
     .notNull(),
 });
+
+// ─── AGENT SCANS ───
+
+export const scanStatusEnum = pgEnum("scan_status", [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+]);
+
+export const agentScans = pgTable(
+  "agent_scans",
+  {
+    id: varchar("id", { length: 32 }).primaryKey(),
+    agentId: varchar("agent_id", { length: 16 })
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    status: scanStatusEnum("status").default("pending").notNull(),
+    phases: jsonb("phases").notNull(), // { id, status, output[], durationMs }[]
+    summary: jsonb("summary"), // { total, pass, warn, fail, skip, overallStatus }
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("agent_scans_agentId_idx").on(table.agentId)],
+);
 
 export const intents = pgTable("intents", {
   id: varchar("id", { length: 16 }).primaryKey(),

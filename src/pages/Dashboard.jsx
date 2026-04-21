@@ -4695,15 +4695,19 @@ function NewAgentFlow({ mob, onClose }) {
   const [phase, setPhase] = useState(-1);
   const [termLines, setTermLines] = useState([]);
   const [submitted, setSubmitted] = useState(false);
-  const [pipelineStep, setPipelineStep] = useState(0);
   const [publishError, setPublishError] = useState(null);
   const [agentName, setAgentName] = useState("");
   const [agentDesc, setAgentDesc] = useState("");
   const [verticals, setVerticals] = useState(["SEO"]);
   const [publishedId, setPublishedId] = useState(null);
+  const [scanResult, setScanResult] = useState(null);
+  const pollRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, []);
   const [showSpecs, setShowSpecs] = useState(false);
   const termRef = useCallback(
@@ -4713,12 +4717,22 @@ function NewAgentFlow({ mob, onClose }) {
     [termLines],
   );
 
-  useEffect(() => {
-    if (submitted && pipelineStep < PIPELINE_STAGES.length) {
-      const t = setTimeout(() => setPipelineStep((p) => p + 1), 1200 + pipelineStep * 400);
-      return () => clearTimeout(t);
-    }
-  }, [submitted, pipelineStep]);
+  const startPolling = (agentId) => {
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/agents/${agentId}/scan`, { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        setScanResult(data);
+        if (data.status === "completed" || data.status === "failed") {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      } catch {
+        /* ignore poll errors */
+      }
+    }, 2000);
+  };
 
   const inferName = (uri) => {
     return uri
@@ -4796,6 +4810,7 @@ function NewAgentFlow({ mob, onClose }) {
       const data = await res.json();
       setPublishedId(data.agentId);
       setSubmitted(true);
+      if (data.agentId) startPolling(data.agentId);
     } catch (err) {
       setPublishError(err.message);
     }
@@ -4822,7 +4837,24 @@ function NewAgentFlow({ mob, onClose }) {
     outline: "none",
   };
 
-  if (submitted)
+  if (submitted) {
+    const phases = scanResult?.phases || SCAN_PHASES.map((sp) => ({ id: sp.id, status: "pending", output: [] }));
+    const scanStatus = scanResult?.status || "pending";
+    const summary = scanResult?.summary;
+    const statusIcon = scanStatus === "completed" ? "✓" : scanStatus === "failed" ? "✗" : "◎";
+    const statusBg =
+      scanStatus === "completed"
+        ? "rgba(102,187,106,.08)"
+        : scanStatus === "failed"
+          ? "rgba(239,83,80,.08)"
+          : "rgba(66,165,245,.08)";
+    const statusBorder =
+      scanStatus === "completed"
+        ? "rgba(102,187,106,.15)"
+        : scanStatus === "failed"
+          ? "rgba(239,83,80,.15)"
+          : "rgba(66,165,245,.15)";
+
     return (
       <div>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -4831,8 +4863,8 @@ function NewAgentFlow({ mob, onClose }) {
               width: 52,
               height: 52,
               borderRadius: 13,
-              background: "rgba(102,187,106,.08)",
-              border: "1px solid rgba(102,187,106,.15)",
+              background: statusBg,
+              border: `1px solid ${statusBorder}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -4840,11 +4872,18 @@ function NewAgentFlow({ mob, onClose }) {
               margin: "0 auto 12px",
             }}
           >
-            ✓
+            {statusIcon}
           </div>
-          <h2 style={{ fontFamily: ft.display, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Agent Submitted</h2>
+          <h2 style={{ fontFamily: ft.display, fontSize: 22, fontWeight: 700, marginBottom: 4 }}>
+            {scanStatus === "completed" ? "Scan Complete" : scanStatus === "failed" ? "Scan Failed" : "Scanning Agent"}
+          </h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,.35)" }}>
-            <strong style={{ color: blue }}>{agentName}</strong> is entering the ingestion pipeline.
+            <strong style={{ color: blue }}>{agentName}</strong>
+            {scanStatus === "completed"
+              ? " passed verification"
+              : scanStatus === "failed"
+                ? " has critical issues"
+                : " — running 10-phase pipeline"}
           </p>
           <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)", marginTop: 4 }}>
             {publishedId && <span style={{ color: blue }}>{publishedId} · </span>}
@@ -4852,57 +4891,140 @@ function NewAgentFlow({ mob, onClose }) {
           </div>
         </div>
         <Card mob={mob}>
-          {PIPELINE_STAGES.map((stage, i) => {
-            const done = i < pipelineStep;
-            const active = i === pipelineStep;
-            const c = done ? "#66BB6A" : active ? blue : "rgba(255,255,255,.12)";
+          {phases.map((ph, i) => {
+            const phaseSpec = SCAN_PHASES.find((s) => s.id === ph.id) || { label: ph.id };
+            const done = ph.status === "pass" || ph.status === "warn";
+            const failed = ph.status === "fail";
+            const skipped = ph.status === "skip";
+            const running =
+              ph.status === "running" ||
+              (scanStatus === "running" &&
+                ph.status === "pending" &&
+                i === phases.findIndex((p) => p.status === "pending"));
+            const color = done
+              ? ph.status === "warn"
+                ? "#FFA726"
+                : "#66BB6A"
+              : failed
+                ? "#EF5350"
+                : skipped
+                  ? "rgba(255,255,255,.12)"
+                  : running
+                    ? blue
+                    : "rgba(255,255,255,.12)";
+            const icon = done
+              ? ph.status === "warn"
+                ? "⚠"
+                : "✓"
+              : failed
+                ? "✗"
+                : skipped
+                  ? "—"
+                  : running
+                    ? "●"
+                    : `${i + 1}`;
             return (
-              <div key={i} style={{ display: "flex", gap: 14, marginBottom: 6, alignItems: "center" }}>
-                <div
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: "50%",
-                    border: `2px solid ${c}`,
-                    background: done ? "rgba(102,187,106,.1)" : "transparent",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                    transition: "all .4s",
-                  }}
-                >
-                  {done ? (
-                    <span style={{ fontSize: 12, color: "#66BB6A" }}>✓</span>
-                  ) : (
-                    <span style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color: c }}>{i + 1}</span>
-                  )}
-                </div>
-                <div style={{ flex: 1 }}>
+              <div key={ph.id} style={{ marginBottom: 6 }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div
                     style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: done ? "#66BB6A" : active ? "#E3F2FD" : "rgba(255,255,255,.2)",
-                      transition: "color .4s",
+                      width: 26,
+                      height: 26,
+                      borderRadius: "50%",
+                      border: `2px solid ${color}`,
+                      background: done ? "rgba(102,187,106,.1)" : failed ? "rgba(239,83,80,.1)" : "transparent",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "all .4s",
                     }}
                   >
-                    {stage.label}
+                    <span style={{ fontFamily: ft.mono, fontSize: 10, fontWeight: 700, color }}>{icon}</span>
                   </div>
-                  <div style={{ fontFamily: ft.mono, fontSize: 10, color: "rgba(255,255,255,.15)" }}>{stage.desc}</div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: done
+                          ? ph.status === "warn"
+                            ? "#FFA726"
+                            : "#66BB6A"
+                          : failed
+                            ? "#EF5350"
+                            : running
+                              ? "#E3F2FD"
+                              : "rgba(255,255,255,.2)",
+                      }}
+                    >
+                      {phaseSpec.label}
+                    </div>
+                    {ph.durationMs > 0 && (
+                      <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)" }}>
+                        {ph.durationMs}ms
+                      </span>
+                    )}
+                  </div>
+                  {skipped && (
+                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.15)" }}>docker</span>
+                  )}
+                  {running && (
+                    <span style={{ fontFamily: ft.mono, fontSize: 9, color: blue, animation: "blink 1s infinite" }}>
+                      scanning
+                    </span>
+                  )}
                 </div>
-                {active && (
-                  <span style={{ fontFamily: ft.mono, fontSize: 9, color: blue, animation: "blink 1s infinite" }}>
-                    processing
-                  </span>
+                {(done || failed) && ph.output && ph.output.length > 0 && (
+                  <div style={{ marginLeft: 40, marginTop: 2, marginBottom: 4 }}>
+                    {ph.output.slice(0, 3).map((line, j) => (
+                      <div
+                        key={j}
+                        style={{
+                          fontFamily: ft.mono,
+                          fontSize: 9,
+                          color: String(line).startsWith("?") ? "#FFA726" : "rgba(255,255,255,.2)",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {line}
+                      </div>
+                    ))}
+                    {ph.output.length > 3 && (
+                      <div style={{ fontFamily: ft.mono, fontSize: 9, color: "rgba(255,255,255,.1)" }}>
+                        +{ph.output.length - 3} more
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );
           })}
+          {summary && (
+            <div
+              style={{
+                marginTop: 14,
+                padding: "10px 14px",
+                background: "rgba(255,255,255,.02)",
+                borderRadius: 8,
+                border: "1px solid rgba(255,255,255,.04)",
+                display: "flex",
+                gap: 16,
+                fontFamily: ft.mono,
+                fontSize: 10,
+              }}
+            >
+              <span style={{ color: "#66BB6A" }}>Pass: {summary.pass}</span>
+              <span style={{ color: "#FFA726" }}>Warn: {summary.warn}</span>
+              <span style={{ color: "#EF5350" }}>Fail: {summary.fail}</span>
+              <span style={{ color: "rgba(255,255,255,.15)" }}>Skip: {summary.skip}</span>
+            </div>
+          )}
         </Card>
         <style>{`@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}`}</style>
       </div>
     );
+  }
 
   return (
     <div>
