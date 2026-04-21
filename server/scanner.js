@@ -1,4 +1,4 @@
-import { SCAN_PHASES, WRAPPER_SPEC } from "../cli/shared/constants.js";
+import { SCAN_PHASES, WRAPPER_SPEC, MALWARE_PATTERNS } from "../cli/shared/constants.js";
 import { validateManifest } from "../cli/shared/schemas.js";
 
 const REQUIRED_INPUT_FIELDS = ["target_url", "budget_cap"];
@@ -102,28 +102,62 @@ function runToolsPhase(manifest) {
   return { id: "tools", status: "pass", output, data: { declared, detected: [] }, durationMs: Date.now() - start };
 }
 
+function collectManifestText(manifest) {
+  const parts = [];
+  if (manifest.name) parts.push(manifest.name);
+  if (manifest.description) parts.push(manifest.description);
+  if (manifest.entrypoint) parts.push(manifest.entrypoint);
+  for (const cap of manifest.capabilities || []) {
+    if (cap.name) parts.push(cap.name);
+    if (cap.description) parts.push(cap.description);
+    for (const t of cap.triggers || []) parts.push(t);
+    for (const t of cap.tags || []) parts.push(t);
+  }
+  for (const t of manifest.toolRequirements || []) parts.push(t);
+  if (manifest.policy?.sandbox) parts.push(manifest.policy.sandbox);
+  if (manifest.policy?.dataRetention) parts.push(manifest.policy.dataRetention);
+  for (const d of manifest.policy?.disallowed || []) parts.push(d);
+  for (const e of manifest.evalClaims || []) {
+    if (e.metric) parts.push(e.metric);
+    if (e.target) parts.push(e.target);
+  }
+  return parts.join("\n");
+}
+
 function runPolicyPhase(manifest) {
   const output = [];
   const start = Date.now();
   const disallowed = manifest?.policy?.disallowed || [];
+  let overallStatus = "pass";
+  const malwareFindings = [];
+
+  const text = collectManifestText(manifest);
+  for (const mp of MALWARE_PATTERNS) {
+    if (mp.pattern.test(text)) {
+      malwareFindings.push({ id: mp.id, severity: mp.severity, desc: mp.desc });
+      output.push(`! MALWARE [${mp.severity}] ${mp.desc} (${mp.id})`);
+      if (mp.severity === "critical") overallStatus = "fail";
+      else if (overallStatus !== "fail") overallStatus = "warn";
+    }
+  }
+
+  if (malwareFindings.length === 0) {
+    output.push("No malware patterns detected in manifest");
+  }
 
   if (disallowed.length > 0) {
     output.push(`${disallowed.length} disallowed patterns declared`);
     for (const d of disallowed) output.push(`  ${d}`);
   } else {
     output.push("? No disallowed patterns declared in policy");
+    if (overallStatus === "pass") overallStatus = "warn";
   }
 
-  if (manifest?.policy?.sandbox) {
-    output.push(`Sandbox: ${manifest.policy.sandbox}`);
-  }
-  if (manifest?.policy?.dataRetention) {
-    output.push(`Data retention: ${manifest.policy.dataRetention}`);
-  }
+  if (manifest?.policy?.sandbox) output.push(`Sandbox: ${manifest.policy.sandbox}`);
+  if (manifest?.policy?.dataRetention) output.push(`Data retention: ${manifest.policy.dataRetention}`);
+  output.push("Network restriction test deferred (requires Docker)");
 
-  output.push("Docker-dependent checks deferred (malware scan, network restriction)");
-
-  return { id: "policy", status: disallowed.length > 0 ? "pass" : "warn", output, data: { disallowed }, durationMs: Date.now() - start };
+  return { id: "policy", status: overallStatus, output, data: { malwareFindings, disallowed }, durationMs: Date.now() - start };
 }
 
 function runWrapPhase(manifest) {
