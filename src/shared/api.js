@@ -341,3 +341,9 @@ export async function cancelSmbSubscription() {
 export async function fetchTierGates() {
   return fetchJson("/agent-ops/tier-gates");
 }
+
+// ─── CLI PUBLISH (UI dual-path) ───
+
+export async function publishAgent(manifest, imageUri, imageDigest, imageSizeBytes) {
+  return postJson("/cli/publish", { manifest, imageUri, imageDigest, imageSizeBytes });
+}
