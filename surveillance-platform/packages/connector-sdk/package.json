@@ -1,0 +1,16 @@
+{
+  "name": "@surveillance/connector-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client.js",
+    "./rtsp": "./src/rtsp.js"
+  },
+  "dependencies": {
+    "@surveillance/camera-core": "0.1.0",
+    "@surveillance/shared": "0.1.0"
+  }
+}

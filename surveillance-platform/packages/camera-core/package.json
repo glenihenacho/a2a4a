@@ -1,0 +1,15 @@
+{
+  "name": "@surveillance/camera-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./templates": "./src/templates.js",
+    "./validate": "./src/validate.js"
+  },
+  "dependencies": {
+    "@surveillance/shared": "0.1.0"
+  }
+}

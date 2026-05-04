@@ -1,0 +1,21 @@
+{
+  "name": "@surveillance/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/db/migrate.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.11.0",
+    "@surveillance/camera-core": "0.1.0",
+    "@surveillance/shared": "0.1.0",
+    "better-sqlite3": "^11.0.0",
+    "hono": "^4.4.0",
+    "zod": "^3.23.8"
+  }
+}

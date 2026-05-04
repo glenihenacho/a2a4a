@@ -1,0 +1,27 @@
+{
+  "name": "surveillance-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agentic Surveillance for Existing CCTV — control plane, command broker, and local connector for RTSP camera onboarding.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev --workspace @surveillance/api",
+    "dev:dashboard": "npm run dev --workspace @surveillance/dashboard",
+    "dev:connector": "npm run dev --workspace @surveillance/connector-tauri",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "smoke": "node scripts/smoke.mjs",
+    "db:migrate": "npm run migrate --workspace @surveillance/api"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.0"
+  }
+}

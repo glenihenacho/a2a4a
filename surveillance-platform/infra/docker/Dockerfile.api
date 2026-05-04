@@ -1,0 +1,19 @@
+FROM node:20-bookworm-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+COPY apps/api/package.json apps/api/
+COPY packages/shared/package.json packages/shared/
+COPY packages/camera-core/package.json packages/camera-core/
+RUN npm install --workspaces --include-workspace-root --omit=dev
+
+FROM node:20-bookworm-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV API_PORT=4000
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
+COPY apps/api ./apps/api
+COPY packages/shared ./packages/shared
+COPY packages/camera-core ./packages/camera-core
+EXPOSE 4000
+CMD ["node", "apps/api/src/index.js"]

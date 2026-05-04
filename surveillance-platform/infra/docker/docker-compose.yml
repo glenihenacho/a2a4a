@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      API_PORT: 4000
+      DATABASE_URL: file:/data/surveillance.sqlite
+      DASHBOARD_ORIGIN: http://localhost:8080
+    volumes:
+      - api-data:/data
+    ports:
+      - "4000:4000"
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.dashboard
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  api-data:

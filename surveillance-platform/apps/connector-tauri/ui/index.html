@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Surveillance Connector</title>
+    <style>
+      body { margin: 0; padding: 24px; background: #060A12; color: #E3F2FD; font-family: system-ui, sans-serif; }
+      h1 { font-size: 18px; margin: 0 0 12px; letter-spacing: .04em; }
+      label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #42A5F5; }
+      input { width: 100%; padding: 10px; margin-top: 6px; background: rgba(0,0,0,.3); color: inherit; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 18px; letter-spacing: .12em; text-align: center; }
+      button { width: 100%; margin-top: 12px; padding: 10px; background: #42A5F5; color: #001018; border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+      .status { margin-top: 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: rgba(255,255,255,.6); }
+    </style>
+  </head>
+  <body>
+    <h1>SURVEILLANCE · CONNECTOR</h1>
+    <label for="code">Pairing code</label>
+    <input id="code" maxlength="6" placeholder="ABC123" autofocus />
+    <button id="pair">Pair this device</button>
+    <div class="status" id="status">Idle</div>
+    <script src="./connector.js"></script>
+  </body>
+</html>
